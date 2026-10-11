@@ -79,6 +79,7 @@ html_code = """<!DOCTYPE html>
             let best = null, minD = Infinity;
             let nList = getNeighbors(hitB.row, hitB.col);
             nList.push({r: hitB.row, c: hitB.col-1}, {r: hitB.row, c: hitB.col+1});
+            
             for (let n of nList) {
                 let maxC = (n.r % 2 === 1) ? 9 : 10;
                 if (n.r >= 0 && n.r < 15 && n.c >= 0 && n.c < maxC) {
@@ -87,19 +88,12 @@ html_code = """<!DOCTYPE html>
                         let offX = (n.r % 2 === 1) ? rad : 0;
                         let tx = 25 + rad + n.c * dia + offX;
                         let ty = 25 + n.r * rH;
-                        if (n.r > hitB.row) continue;
-                        let connected = (n.r === 0);
-                        if (!connected) {
-                            let subN = getNeighbors(n.r, n.c);
-                            connected = subN.some(sn => bubbles.some(b => b.active && b.row === sn.r && b.col === sn.c));
-                        }
-                        if (connected) {
-                            let d = Math.hypot(bullet.x - tx, bullet.y - ty);
-                            if (d < minD) { minD = d; best = {row: n.r, col: n.c, x: tx, y: ty}; }
-                        }
+                        let d = Math.hypot(bullet.x - tx, bullet.y - ty);
+                        if (d < minD) { minD = d; best = {row: n.r, col: n.c, x: tx, y: ty}; }
                     }
                 }
             }
+
             if (!best) {
                 for (let r = 0; r < 15; r++) {
                     let maxC = (r % 2 === 1) ? 9 : 10;
@@ -109,31 +103,21 @@ html_code = """<!DOCTYPE html>
                             let offX = (r % 2 === 1) ? rad : 0;
                             let tx = 25 + rad + c * dia + offX;
                             let ty = 25 + r * rH;
-                            let connected = (r === 0);
-                            if (!connected) {
-                                let subN = getNeighbors(r, c);
-                                connected = subN.some(sn => bubbles.some(b => b.active && b.row === sn.r && b.col === sn.c));
-                            }
-                            if (connected) {
-                                let d = Math.hypot(bullet.x - tx, bullet.y - ty);
-                                if (d < minD) { minD = d; best = {row: r, col: c, x: tx, y: ty}; }
-                            }
+                            let d = Math.hypot(bullet.x - tx, bullet.y - ty);
+                            if (d < minD) { minD = d; best = {row: r, col: c, x: tx, y: ty}; }
                         }
                     }
-                    if (best) break;
                 }
             }
+
             if (best) {
-                let doubleCheck = bubbles.some(b => b.active && b.row === best.row && b.col === best.col);
-                if (!doubleCheck) {
-                    let nb = { row: best.row, col: best.col, x: best.x, y: best.y, r: rad, color: bCol, active: true };
-                    bubbles.push(nb);
-                    if (nb.y >= 430) { over = true; return; }
-                    if (match(nb, bCol) > 0) floatCheck();
-                    else {
-                        shots++;
-                        if (shots >= 5) { addRow(); shots = 0; }
-                    }
+                let nb = { row: best.row, col: best.col, x: best.x, y: best.y, r: rad, color: bCol, active: true };
+                bubbles.push(nb);
+                if (nb.y >= 430) { over = true; return; }
+                if (match(nb, bCol) > 0) floatCheck();
+                else {
+                    shots++;
+                    if (shots >= 5) { addRow(); shots = 0; }
                 }
             }
         }
