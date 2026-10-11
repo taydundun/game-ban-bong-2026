@@ -76,10 +76,11 @@ html_code = """<!DOCTYPE html>
         }
 
         function snap(hitB, bCol) {
-            let best = null, minD = Infinity;
+            let best = null;
+            let minDist = Infinity;
             let nList = getNeighbors(hitB.row, hitB.col);
-            nList.push({r: hitB.row, c: hitB.col-1}, {r: hitB.row, c: hitB.col+1});
-            
+
+            // Tìm ô trống lân cận gần điểm va chạm của đạn nhất để chèn vào khe hở tự nhiên
             for (let n of nList) {
                 let maxC = (n.r % 2 === 1) ? 9 : 10;
                 if (n.r >= 0 && n.r < 15 && n.c >= 0 && n.c < maxC) {
@@ -89,35 +90,26 @@ html_code = """<!DOCTYPE html>
                         let tx = 25 + rad + n.c * dia + offX;
                         let ty = 25 + n.r * rH;
                         let d = Math.hypot(bullet.x - tx, bullet.y - ty);
-                        if (d < minD) { minD = d; best = {row: n.r, col: n.c, x: tx, y: ty}; }
-                    }
-                }
-            }
-
-            if (!best) {
-                for (let r = 0; r < 15; r++) {
-                    let maxC = (r % 2 === 1) ? 9 : 10;
-                    for (let c = 0; c < maxC; c++) {
-                        let occupied = bubbles.some(b => b.active && b.row === r && b.col === c);
-                        if (!occupied) {
-                            let offX = (r % 2 === 1) ? rad : 0;
-                            let tx = 25 + rad + c * dia + offX;
-                            let ty = 25 + r * rH;
-                            let d = Math.hypot(bullet.x - tx, bullet.y - ty);
-                            if (d < minD) { minD = d; best = {row: r, col: c, x: tx, y: ty}; }
+                        if (d < minDist) {
+                            minDist = d;
+                            best = { row: n.r, col: n.c, x: tx, y: ty };
                         }
                     }
                 }
             }
 
             if (best) {
-                let nb = { row: best.row, col: best.col, x: best.x, y: best.y, r: rad, color: bCol, active: true };
-                bubbles.push(nb);
-                if (nb.y >= 430) { over = true; return; }
-                if (match(nb, bCol) > 0) floatCheck();
-                else {
-                    shots++;
-                    if (shots >= 5) { addRow(); shots = 0; }
+                let doubleCheck = bubbles.some(b => b.active && b.row === best.row && b.col === best.col);
+                if (!doubleCheck) {
+                    let nb = { row: best.row, col: best.col, x: best.x, y: best.y, r: rad, color: bCol, active: true };
+                    bubbles.push(nb);
+                    if (nb.y >= 430) { over = true; return; }
+                    if (match(nb, bCol) > 0) {
+                        floatCheck();
+                    } else {
+                        shots++;
+                        if (shots >= 5) { addRow(); shots = 0; }
+                    }
                 }
             }
         }
@@ -136,8 +128,9 @@ html_code = """<!DOCTYPE html>
             }
             let nb = { row: 0, col: ac, x: tx, y: ty, r: rad, color: bCol, active: true };
             bubbles.push(nb);
-            if (match(nb, bCol) > 0) floatCheck();
-            else {
+            if (match(nb, bCol) > 0) {
+                floatCheck();
+            } else {
                 shots++;
                 if (shots >= 5) { addRow(); shots = 0; }
             }
@@ -171,139 +164,4 @@ html_code = """<!DOCTYPE html>
                 let cur = q.shift();
                 let nList = getNeighbors(cur.row, cur.col);
                 for (let n of nList) {
-                    let neighbor = bubbles.find(b => b.active && !vis.has(b) && b.row === n.r && b.col === n.c);
-                    if (neighbor) { vis.add(neighbor); q.push(neighbor); }
-                }
-            }
-            bubbles.forEach(b => {
-                if (b.active && !vis.has(b)) {
-                    b.active = false;
-                    score += 30;
-                    fallingBubbles.push({ x: b.x, y: b.y, r: rad, color: b.color, dx: (Math.random() - 0.5) * 4, dy: 2 + Math.random() * 2 });
-                }
-            });
-        }
-
-        function update() {
-            if (over) return;
-            if (bullet) {
-                bullet.x += bullet.dx;
-                bullet.y += bullet.dy;
-                if (bullet.x - rad < 0 || bullet.x + rad > cvs.width) bullet.dx *= -1;
-                if (bullet.y - rad <= 15) {
-                    snapCeiling(bullet.color);
-                    bullet = null;
-                    return;
-                }
-                for (let b of bubbles) {
-                    if (b.active && Math.hypot(bullet.x - b.x, bullet.y - b.y) <= dia) {
-                        snap(b, bullet.color);
-                        bullet = null;
-                        break;
-                    }
-                }
-            }
-            fallingBubbles.forEach(fb => {
-                fb.y += fb.dy;
-                fb.x += fb.dx;
-                fb.dy += 0.5;
-            });
-            fallingBubbles = fallingBubbles.filter(fb => fb.y < cvs.height + 50);
-        }
-
-        function draw() {
-            ctx.clearRect(0, 0, cvs.width, cvs.height);
-            ctx.fillStyle = "#FFF";
-            ctx.font = "bold 16px sans-serif";
-            ctx.fillText("Điểm: " + score, 20, 25);
-            ctx.fillText("Chờ hàng: " + (5 - shots), 310, 25);
-
-            bubbles.forEach(b => {
-                if (b.active) {
-                    ctx.beginPath();
-                    ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
-                    ctx.fillStyle = b.color;
-                    ctx.fill();
-                    ctx.lineWidth = 2;
-                    ctx.strokeStyle = "rgba(255,255,255,0.25)";
-                    ctx.stroke();
-                    ctx.closePath();
-                }
-            });
-
-            fallingBubbles.forEach(fb => {
-                ctx.beginPath();
-                ctx.arc(fb.x, fb.y, fb.r, 0, Math.PI * 2);
-                ctx.fillStyle = fb.color;
-                ctx.fill();
-                ctx.lineWidth = 2;
-                ctx.strokeStyle = "rgba(255,255,255,0.25)";
-                ctx.stroke();
-                ctx.closePath();
-            });
-
-            if (!over) {
-                let a = Math.atan2(my - shooter.y, mx - shooter.x);
-                let rx = shooter.x, ry = shooter.y, rdx = Math.cos(a), rdy = Math.sin(a);
-                ctx.beginPath();
-                ctx.moveTo(rx, ry);
-                for (let i = 0; i < 400; i++) {
-                    rx += rdx * 3; ry += rdy * 3;
-                    if (rx - rad < 0) { rx = rad; rdx *= -1; ctx.lineTo(rx, ry); }
-                    else if (rx + rad > cvs.width) { rx = cvs.width - rad; rdx *= -1; ctx.lineTo(rx, ry); }
-                    if (ry <= 25) { ctx.lineTo(rx, ry); break; }
-                    let hit = bubbles.some(b => b.active && Math.hypot(rx - b.x, ry - b.y) < rad * 1.8);
-                    if (hit) { ctx.lineTo(rx, ry); break; }
-                }
-                ctx.lineTo(rx, ry);
-                ctx.strokeStyle = "rgba(255, 255, 255, 0.6)";
-                ctx.setLineDash([4, 4]);
-                ctx.stroke();
-                ctx.setLineDash([]);
-            }
-
-            if (bullet) {
-                ctx.beginPath();
-                ctx.arc(bullet.x, bullet.y, rad, 0, Math.PI * 2);
-                ctx.fillStyle = bullet.color;
-                ctx.fill();
-                ctx.closePath();
-            }
-
-            ctx.beginPath();
-            ctx.arc(shooter.x, shooter.y, shooter.r, 0, Math.PI * 2);
-            ctx.fillStyle = shooter.color;
-            ctx.fill();
-            ctx.lineWidth = 3;
-            ctx.strokeStyle = "#FFF";
-            ctx.stroke();
-            ctx.closePath();
-
-            if (over) {
-                ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
-                ctx.fillRect(0, 0, cvs.width, cvs.height);
-                ctx.fillStyle = "#FF5964";
-                ctx.font = "bold 32px sans-serif";
-                ctx.textAlign = "center";
-                ctx.fillText("GAME OVER", cvs.width / 2, cvs.height / 2 - 20);
-                ctx.fillStyle = "#FFFFFF";
-                ctx.font = "18px sans-serif";
-                ctx.fillText("Tổng điểm: " + score, cvs.width / 2, cvs.height / 2 + 20);
-                ctx.fillText("Click chuột để chơi lại", cvs.width / 2, cvs.height / 2 + 60);
-                ctx.textAlign = "left";
-            }
-        }
-
-        function loop() {
-            update();
-            draw();
-            requestAnimationFrame(loop);
-        }
-        loop();
-    </script>
-</body>
-</html>
-"""
-
-encoded_html = base64.b64encode(html_code.encode("utf-8")).decode("utf-8")
-components.iframe(f"data:text/html;base64,{encoded_html}", height=580)
+                    let neighbor = bubbles.find(b => b
