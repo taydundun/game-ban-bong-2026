@@ -5,7 +5,7 @@ import base64
 st.set_page_config(page_title="Game Bắn Bóng", layout="centered")
 
 st.title("🎯 Game Bắn Bóng (Bubble Shooter)")
-st.write("Game Bubble Shooter hoàn chỉnh: Bám lưới chuẩn xác, nổ cụm màu và tiến hàng mới!")
+st.write("Phiên bản hoàn chỉnh: Bám lưới chuẩn xác, thêm hàng mỗi 5 lần bắn và có Game Over khi đầy màn hình!")
 
 html_code = """
 <!DOCTYPE html>
@@ -32,6 +32,7 @@ html_code = """
 
         let score = 0;
         let shotsSinceLastRow = 0;
+        let gameOver = false;
         const colors = ["#FF5964", "#35A7FF", "#38B000", "#FFE600", "#9B5DE5"];
         
         function getRandomColor() {
@@ -51,6 +52,9 @@ html_code = """
 
         function initBubbles() {
             bubbles = [];
+            gameOver = false;
+            score = 0;
+            shotsSinceLastRow = 0;
             for (let r = 0; r < rows; r++) {
                 let colsInRow = (r % 2 === 1) ? cols - 1 : cols;
                 let rowOffsetX = (r % 2 === 1) ? radius : 0;
@@ -73,6 +77,10 @@ html_code = """
             bubbles.forEach(b => {
                 b.y += rowHeight;
                 b.row += 1;
+                // Kiểm tra Game Over nếu bóng chạm vạch dưới
+                if (b.active && b.y >= 430) {
+                    gameOver = true;
+                }
             });
 
             let r = 0;
@@ -92,12 +100,17 @@ html_code = """
         }
 
         canvas.addEventListener("mousemove", (e) => {
+            if (gameOver) return;
             const rect = canvas.getBoundingClientRect();
             mouseX = e.clientX - rect.left;
             mouseY = e.clientY - rect.top;
         });
 
         canvas.addEventListener("click", () => {
+            if (gameOver) {
+                initBubbles();
+                return;
+            }
             if (!bullet) {
                 let angle = Math.atan2(mouseY - shooter.y, mouseX - shooter.x);
                 if (angle > -0.1) angle = -0.1;
@@ -114,11 +127,12 @@ html_code = """
             }
         });
 
+        // THUẬT TOÁN BÁM LƯỚI CHUẨN XÁC NHẤT
         function snapBullet() {
             let bestSlot = null;
             let minDist = Infinity;
 
-            for (let r = 0; r < 12; r++) {
+            for (let r = 0; r < 14; r++) {
                 let colsInRow = (r % 2 === 1) ? cols - 1 : cols;
                 let rowOffsetX = (r % 2 === 1) ? radius : 0;
                 for (let c = 0; c < colsInRow; c++) {
@@ -132,7 +146,7 @@ html_code = """
                             for (let b of bubbles) {
                                 if (b.active) {
                                     let d = Math.hypot(targetX - b.x, targetY - b.y);
-                                    if (d < diameter * 1.2) {
+                                    if (d < diameter * 1.25) {
                                         isAdjacent = true;
                                         break;
                                     }
@@ -163,10 +177,16 @@ html_code = """
                 };
                 bubbles.push(newBubble);
 
+                // Kiểm tra Game Over ngay khi dính bóng chạm mốc thấp
+                if (newBubble.y >= 430) {
+                    gameOver = true;
+                    return;
+                }
+
                 let poppedCount = checkMatch(newBubble, bullet.color);
                 if (poppedCount === 0) {
                     shotsSinceLastRow++;
-                    if (shotsSinceLastRow >= 4) {
+                    if (shotsSinceLastRow >= 5) { // Thêm hàng mới mỗi 5 lần bắn không nổ
                         addNewRow();
                         shotsSinceLastRow = 0;
                     }
@@ -210,89 +230,11 @@ html_code = """
         }
 
         function update() {
+            if (gameOver) return;
+
             if (bullet) {
                 bullet.x += bullet.dx;
                 bullet.y += bullet.dy;
 
                 if (bullet.x - radius < 0 || bullet.x + radius > canvas.width) {
-                    bullet.dx *= -1;
-                }
-
-                if (bullet.y - radius <= 15) {
-                    snapBullet();
-                    bullet = null;
-                    return;
-                }
-
-                for (let b of bubbles) {
-                    if (b.active) {
-                        let dist = Math.hypot(bullet.x - b.x, bullet.y - b.y);
-                        if (dist < diameter * 0.95) {
-                            snapBullet();
-                            bullet = null;
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-
-        function draw() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            ctx.fillStyle = "#FFFFFF";
-            ctx.font = "bold 16px sans-serif";
-            ctx.fillText("Điểm: " + score, 20, 25);
-
-            bubbles.forEach(b => {
-                if (b.active) {
-                    ctx.beginPath();
-                    ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
-                    ctx.fillStyle = b.color;
-                    ctx.fill();
-                    ctx.lineWidth = 2;
-                    ctx.strokeStyle = "rgba(255,255,255,0.25)";
-                    ctx.stroke();
-                    ctx.closePath();
-                }
-            });
-
-            ctx.beginPath();
-            ctx.moveTo(shooter.x, shooter.y);
-            ctx.lineTo(mouseX, mouseY);
-            ctx.setLineDash([4, 4]);
-            ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
-            ctx.stroke();
-            ctx.setLineDash([]);
-
-            if (bullet) {
-                ctx.beginPath();
-                ctx.arc(bullet.x, bullet.y, radius, 0, Math.PI * 2);
-                ctx.fillStyle = bullet.color;
-                ctx.fill();
-                ctx.closePath();
-            }
-
-            ctx.beginPath();
-            ctx.arc(shooter.x, shooter.y, shooter.radius, 0, Math.PI * 2);
-            ctx.fillStyle = shooter.color;
-            ctx.fill();
-            ctx.lineWidth = 3;
-            ctx.strokeStyle = "#FFF";
-            ctx.stroke();
-            ctx.closePath();
-        }
-
-        function loop() {
-            update();
-            draw();
-            requestAnimationFrame(loop);
-        }
-        loop();
-    </script>
-</body>
-</html>
-"""
-
-encoded_html = base64.b64encode(html_code.encode("utf-8")).decode("utf-8")
-components.iframe(f"data:text/html;base64,{encoded_html}", height=580)
+                    bullet.dx *= -
