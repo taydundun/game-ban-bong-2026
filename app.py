@@ -1,15 +1,17 @@
 import streamlit as st
 import streamlit.components.v1 as components
+import base64
 
 st.set_page_config(page_title="Game Bắn Bóng", layout="centered")
 
 st.title("🎯 Game Bắn Bóng (Bubble Shooter)")
 st.write("Game Bubble Shooter chuẩn chỉnh: Lưới bóng so le, ngắm bắn dính lưới, nổ cụm màu và tiến hàng mới!")
 
-game_code = r"""
+html_code = """
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="utf-8">
     <style>
         body { margin: 0; padding: 0; text-align: center; font-family: sans-serif; background: #0f0f1a; color: white; }
         canvas {
@@ -235,3 +237,40 @@ game_code = r"""
             ctx.beginPath();
             ctx.moveTo(shooter.x, shooter.y);
             ctx.lineTo(mouseX, mouseY);
+            ctx.setLineDash([4, 4]);
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+            ctx.stroke();
+            ctx.setLineDash([]);
+
+            if (bullet) {
+                ctx.beginPath();
+                ctx.arc(bullet.x, bullet.y, radius, 0, Math.PI * 2);
+                ctx.fillStyle = bullet.color;
+                ctx.fill();
+                ctx.closePath();
+            }
+
+            ctx.beginPath();
+            ctx.arc(shooter.x, shooter.y, shooter.radius, 0, Math.PI * 2);
+            ctx.fillStyle = shooter.color;
+            ctx.fill();
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = "#FFF";
+            ctx.stroke();
+            ctx.closePath();
+        }
+
+        function loop() {
+            update();
+            draw();
+            requestAnimationFrame(loop);
+        }
+        loop();
+    </script>
+</body>
+</html>
+"""
+
+# Mã hóa an toàn chống lỗi cú pháp Python
+encoded_html = base64.b64encode(html_code.encode("utf-8")).decode("utf-8")
+components.iframe(f"data:text/html;base64,{encoded_html}", height=580)
