@@ -57,7 +57,7 @@ html_code = """<!DOCTYPE html>
             if (!bullet) {
                 let a = Math.atan2(my - shooter.y, mx - shooter.x);
                 if (a > -0.1) a = -0.1;
-                if (a < -Math.PI + 0.1) a = -Math.PI + 0.1;
+                if (a<-Math.PI+0.1) a = -Math.PI + 0.1;
                 bullet = { x: shooter.x, y: shooter.y, dx: Math.cos(a) * 7, dy: Math.sin(a) * 7, color: shooter.color };
                 shooter.color = rC();
             }
@@ -76,13 +76,17 @@ html_code = """<!DOCTYPE html>
         }
 
         function snap(hitB, bCol) {
-            let best = null, minScore = Infinity;
+            let best = null, minD = Infinity;
             let nList = getNeighbors(hitB.row, hitB.col);
             
-            // Chỉ xét các ô lân cận nằm NGANG hoặc PHÍA TRÊN quả bị chạm (hoặc cùng hàng/hàng trên), 
-            // TUYỆT ĐỐI KHÔNG cho phép đạn chui xuống dưới tạo đuôi dọc.
+            // Tính góc va chạm từ tâm quả bóng bị trúng đến vị trí viên đạn
+            let impactAngle = Math.atan2(bullet.y - hitB.y, bullet.x - hitB.x);
+
+            // Tìm ô lân cận trống có vị trí khớp chuẩn nhất với góc va chạm của đạn
+            let bestN = null;
+            let minAngleDiff = Infinity;
+
             for (let n of nList) {
-                if (n.r > hitB.row) continue; // Chặn đứng việc rớt xuống dưới tạo đuôi
                 let maxC = (n.r % 2 === 1) ? 9 : 10;
                 if (n.r >= 0 && n.r < 15 && n.c >= 0 && n.c < maxC) {
                     let occupied = bubbles.some(b => b.active && b.row === n.r && b.col === n.c);
@@ -91,49 +95,41 @@ html_code = """<!DOCTYPE html>
                         let tx = 25 + rad + n.c * dia + offX;
                         let ty = 25 + n.r * rH;
                         
-                        // Tính điểm phù hợp dựa trên góc va chạm của viên đạn so với tâm ô trống
-                        let angleToBullet = Math.atan2(bullet.y - ty, bullet.x - tx);
+                        let angleToN = Math.atan2(ty - hitB.y, tx - hitB.x);
+                        let diff = Math.abs(impactAngle - angleToN);
+                        if (diff > Math.PI) diff = Math.PI * 2 - diff;
+
+                        if (diff < minAngleDiff) {
+                            minAngleDiff = diff;
+                            bestN = { row: n.r, col: n.c, x: tx, y: ty };
+                        }
+                    }
+                }
+            }
+
+            if (bestN) {
+                let doubleCheck = bubbles.some(b => b.active && b.row === bestN.row && b.col === bestN.col);
+                if (!doubleCheck) {
+                    let nb = { row: bestN.row, col: bestN.col, x: bestN.x, y: bestN.y, r: rad, color: bCol, active: true };
+                    bubbles.push(nb);
+                    if (nb.y >= 430) { over = true; return; }
+                    if (match(nb, bCol) > 0) { floatCheck(); }
+                    else { shots++; if (shots >= 5) { addRow(); shots = 0; } }
+                    return;
+                }
+            }
+
+            // Fallback an toàn nếu không tìm được theo góc: tìm ô trống gần nhất xung quanh
+            for (let n of nList) {
+                let maxC = (n.r % 2 === 1) ? 9 : 10;
+                if (n.r >= 0 && n.r < 15 && n.c >= 0 && n.c < maxC) {
+                    let occupied = bubbles.some(b => b.active && b.row === n.r && b.col === n.c);
+                    if (!occupied) {
+                        let offX = (n.r % 2 === 1) ? rad : 0;
+                        let tx = 25 + rad + n.c * dia + offX;
+                        let ty = 25 + n.r * rH;
                         let d = Math.hypot(bullet.x - tx, bullet.y - ty);
-                        
-                        // Ưu tiên ô nào nằm đúng hướng viên đạn bay tới nhất
-                        if (d < minScore) {
-                            minScore = d;
-                            best = { row: n.r, col: n.c, x: tx, y: ty };
-                        }
-                    }
-                }
-            }
-
-            // Fallback nếu không tìm thấy ô phía trên/ngang, tìm ô trống gần nhất bất kỳ xung quanh quả bị chạm
-            if (!best) {
-                for (let n of nList) {
-                    let maxC = (n.r % 2 === 1) ? 9 : 10;
-                    if (n.r >= 0 && n.r < 15 && n.c >= 0 && n.c < maxC) {
-                        let occupied = bubbles.some(b => b.active && b.row === n.r && b.col === n.c);
-                        if (!occupied) {
-                            let offX = (n.r % 2 === 1) ? rad : 0;
-                            let tx = 25 + rad + n.c * dia + offX;
-                            let ty = 25 + n.r * rH;
-                            let d = Math.hypot(bullet.x - tx, bullet.y - ty);
-                            if (d < minScore) { minScore = d; best = { row: n.r, col: n.c, x: tx, y: ty }; }
-                        }
-                    }
-                }
-            }
-
-            // Fallback toàn cục cuối cùng chống mất đạn
-            if (!best) {
-                for (let r = 0; r < 15; r++) {
-                    let maxC = (r % 2 === 1) ? 9 : 10;
-                    let occupied = bubbles.some(b => b.active && b.row === r && b.col === c);
-                    for (let c = 0; c < maxC; c++) {
-                        if (!bubbles.some(b => b.active && b.row === r && b.col === c)) {
-                            let offX = (r % 2 === 1) ? rad : 0;
-                            let tx = 25 + rad + c * dia + offX;
-                            let ty = 25 + r * rH;
-                            let d = Math.hypot(bullet.x - tx, bullet.y - ty);
-                            if (d < minScore) { minScore = d; best = { row: r, col: c, x: tx, y: ty }; }
-                        }
+                        if (d < minD) { minD = d; best = { row: n.r, col: n.c, x: tx, y: ty }; }
                     }
                 }
             }
@@ -166,10 +162,13 @@ html_code = """<!DOCTYPE html>
                 }
                 ac = bestC; tx = 25 + rad + ac * dia;
             }
-            let nb = { row: 0, col: ac, x: tx, y: ty, r: rad, color: bCol, active: true };
-            bubbles.push(nb);
-            if (match(nb, bCol) > 0) { floatCheck(); }
-            else { shots++; if (shots >= 5) { addRow(); shots = 0; } }
+            let doubleCheck = bubbles.some(b => b.active && b.row === 0 && b.col === ac);
+            if (!doubleCheck) {
+                let nb = { row: 0, col: ac, x: tx, y: ty, r: rad, color: bCol, active: true };
+                bubbles.push(nb);
+                if (match(nb, bCol) > 0) { floatCheck(); }
+                else { shots++; if (shots >= 5) { addRow(); shots = 0; } }
+            }
         }
 
         function match(startB, tCol) {
@@ -309,30 +308,4 @@ html_code = """<!DOCTYPE html>
             ctx.closePath();
 
             if (over) {
-                ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
-                ctx.fillRect(0, 0, cvs.width, cvs.height);
-                ctx.fillStyle = "#FF5964";
-                ctx.font = "bold 32px sans-serif";
-                ctx.textAlign = "center";
-                ctx.fillText("GAME OVER", cvs.width / 2, cvs.height / 2 - 20);
-                ctx.fillStyle = "#FFFFFF";
-                ctx.font = "18px sans-serif";
-                ctx.fillText("Tổng điểm: " + score, cvs.width / 2, cvs.height / 2 + 20);
-                ctx.fillText("Click chuột để chơi lại", cvs.width / 2, cvs.height / 2 + 60);
-                ctx.textAlign = "left";
-            }
-        }
-
-        function loop() {
-            update();
-            draw();
-            requestAnimationFrame(loop);
-        }
-        loop();
-    </script>
-</body>
-</html>
-"""
-
-encoded_html = base64.b64encode(html_code.encode("utf-8")).decode("utf-8")
-components.iframe(f"data:text/html;base64,{encoded_html}", height=580)
+                ctx.fillStyle = "rgba(0, 0, 0,
