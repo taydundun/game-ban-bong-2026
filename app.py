@@ -5,7 +5,7 @@ import base64
 st.set_page_config(page_title="Game Bắn Bóng", layout="centered")
 
 st.title("🎯 Game Bắn Bóng (Bubble Shooter)")
-st.write("Game Bubble Shooter chuẩn chỉnh: Lưới bóng so le, ngắm bắn dính lưới, nổ cụm màu và tiến hàng mới!")
+st.write("Game Bubble Shooter hoàn chỉnh: Lưới bóng so le chuẩn, ngắm bắn dính lưới, nổ cụm màu và tiến hàng mới!")
 
 html_code = """
 <!DOCTYPE html>
@@ -191,86 +191,4 @@ html_code = """
                 bullet.x += bullet.dx;
                 bullet.y += bullet.dy;
 
-                if (bullet.x - radius < 0 || bullet.x + radius > canvas.width) {
-                    bullet.dx *= -1;
-                }
-
-                if (bullet.y - radius <= 15) {
-                    snapBulletToGrid(bullet.color);
-                    bullet = null;
-                    return;
-                }
-
-                for (let b of bubbles) {
-                    if (b.active) {
-                        let dist = Math.hypot(bullet.x - b.x, bullet.y - b.y);
-                        if (dist < diameter * 0.95) {
-                            snapBulletToGrid(bullet.color);
-                            bullet = null;
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-
-        function draw() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            ctx.fillStyle = "#FFFFFF";
-            ctx.font = "bold 16px sans-serif";
-            ctx.fillText("Điểm: " + score, 20, 25);
-
-            bubbles.forEach(b => {
-                if (b.active) {
-                    ctx.beginPath();
-                    ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
-                    ctx.fillStyle = b.color;
-                    ctx.fill();
-                    ctx.lineWidth = 2;
-                    ctx.strokeStyle = "rgba(255,255,255,0.25)";
-                    ctx.stroke();
-                    ctx.closePath();
-                }
-            });
-
-            ctx.beginPath();
-            ctx.moveTo(shooter.x, shooter.y);
-            ctx.lineTo(mouseX, mouseY);
-            ctx.setLineDash([4, 4]);
-            ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
-            ctx.stroke();
-            ctx.setLineDash([]);
-
-            if (bullet) {
-                ctx.beginPath();
-                ctx.arc(bullet.x, bullet.y, radius, 0, Math.PI * 2);
-                ctx.fillStyle = bullet.color;
-                ctx.fill();
-                ctx.closePath();
-            }
-
-            ctx.beginPath();
-            ctx.arc(shooter.x, shooter.y, shooter.radius, 0, Math.PI * 2);
-            ctx.fillStyle = shooter.color;
-            ctx.fill();
-            ctx.lineWidth = 3;
-            ctx.strokeStyle = "#FFF";
-            ctx.stroke();
-            ctx.closePath();
-        }
-
-        function loop() {
-            update();
-            draw();
-            requestAnimationFrame(loop);
-        }
-        loop();
-    </script>
-</body>
-</html>
-"""
-
-# Mã hóa an toàn chống lỗi cú pháp Python
-encoded_html = base64.b64encode(html_code.encode("utf-8")).decode("utf-8")
-components.iframe(f"data:text/html;base64,{encoded_html}", height=580)
+                if (bullet.x - radius < 0 || bullet.x + radius > canvas
