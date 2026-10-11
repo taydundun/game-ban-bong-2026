@@ -59,22 +59,30 @@ function getNeighbors(r, c) {
 
 function findBestEmptyCell(x, y) {
     let bestCell = null, minD = Infinity;
+    
+    // Duyệt qua toàn bộ lưới tọa độ để tìm ô trống tối ưu nhất
     for (let r = 0; r < 15; r++) {
         let maxC = (r % 2 === 1) ? 9 : 10;
         let offX = (r % 2 === 1) ? rad : 0;
         for (let c = 0; c < maxC; c++) {
             let occupied = bubbles.some(b => b.active && b.row === r && b.col === c);
             if (!occupied) {
-                let hasNeighbor = (r === 0) || getNeighbors(r, c).some(n => bubbles.some(b => b.active && b.row === n.r && b.col === n.c));
-                if (hasNeighbor) {
+                // Kiểm tra xem ô này có nằm sát trần (row === 0) hoặc có tiếp giáp với quả bóng nào đang hiện diện không
+                let hasActiveNeighbor = (r === 0) || getNeighbors(r, c).some(n => bubbles.some(b => b.active && b.row === n.r && b.col === n.c));
+                if (hasActiveNeighbor) {
                     let tx = 25 + rad + c * dia + offX;
                     let ty = 25 + r * rH;
                     let d = Math.hypot(x - tx, y - ty);
-                    if (d < minD) { minD = d; bestCell = { row: r, col: c, x: tx, y: ty }; }
+                    if (d < minD) {
+                        minD = d;
+                        bestCell = { row: r, col: c, x: tx, y: ty };
+                    }
                 }
             }
         }
     }
+    
+    // Fallback dự phòng nếu không tìm thấy ô tiếp giáp
     if (!bestCell) {
         minD = Infinity;
         for (let r = 0; r < 15; r++) {
