@@ -1,14 +1,12 @@
 import streamlit as st
 import streamlit.components.v1 as components
-import base64
 
 st.set_page_config(page_title="Game Bắn Bóng", layout="centered")
 
 st.title("🎯 Game Bắn Bóng (Bubble Shooter)")
 st.write("Phiên bản hoàn chỉnh: Bám lưới chuẩn xác, thêm hàng mỗi 5 lần bắn và có Game Over khi đầy màn hình!")
 
-html_code = r"""
-<!DOCTYPE html>
+html_code = '''<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
@@ -27,13 +25,13 @@ html_code = r"""
 <body>
     <canvas id="gameCanvas" width="440" height="540"></canvas>
     <script>
-        const canvas = document.getElementById("gameCanvas");
-        const ctx = canvas.getContext("2d");
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
 
         let score = 0;
         let shotsSinceLastRow = 0;
         let gameOver = false;
-        const colors = ["#FF5964", "#35A7FF", "#38B000", "#FFE600", "#9B5DE5"];
+        const colors = ['#FF5964', '#35A7FF', '#38B000', '#FFE600', '#9B5DE5'];
         
         function getRandomColor() {
             return colors[Math.floor(Math.random() * colors.length)];
@@ -98,14 +96,14 @@ html_code = r"""
             }
         }
 
-        canvas.addEventListener("mousemove", (e) => {
+        canvas.addEventListener('mousemove', (e) => {
             if (gameOver) return;
             const rect = canvas.getBoundingClientRect();
             mouseX = e.clientX - rect.left;
             mouseY = e.clientY - rect.top;
         });
 
-        canvas.addEventListener("click", () => {
+        canvas.addEventListener('click', () => {
             if (gameOver) {
                 initBubbles();
                 return;
@@ -259,13 +257,41 @@ html_code = r"""
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            ctx.fillStyle = "#FFFFFF";
-            ctx.font = "bold 16px sans-serif";
-            ctx.fillText("Điểm: " + score, 20, 25);
-            ctx.fillText("Lượt chờ hàng: " + (5 - shotsSinceLastRow), 260, 25);
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 16px sans-serif';
+            ctx.fillText('Điểm: ' + score, 20, 25);
+            ctx.fillText('Lượt chờ hàng: ' + (5 - shotsSinceLastRow), 260, 25);
 
             bubbles.forEach(b => {
                 if (b.active) {
                     ctx.beginPath();
                     ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
-                    ctx.fillStyle =
+                    ctx.fillStyle = b.color;
+                    ctx.fill();
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+                    ctx.stroke();
+                    ctx.closePath();
+                }
+            });
+
+            if (!gameOver) {
+                ctx.beginPath();
+                ctx.moveTo(shooter.x, shooter.y);
+                ctx.lineTo(mouseX, mouseY);
+                ctx.setLineDash([4, 4]);
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+
+            if (bullet) {
+                ctx.beginPath();
+                ctx.arc(bullet.x, bullet.y, radius, 0, Math.PI * 2);
+                ctx.fillStyle = bullet.color;
+                ctx.fill();
+                ctx.closePath();
+            }
+
+            ctx.beginPath();
+            ctx.
