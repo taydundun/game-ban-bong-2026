@@ -76,24 +76,4 @@ html_parts = [
     "ctx.fillText('Điểm: '+score,20,25);ctx.fillText('Chờ hàng: '+(5-shots),310,25);",
     "bubbles.forEach(b=>{if(b.active){ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,Math.PI*2);ctx.fillStyle=b.color;ctx.fill();",
     "ctx.lineWidth=2;ctx.strokeStyle='rgba(255,255,255,0.25)';ctx.stroke();ctx.closePath();}});",
-    "fallingBubbles.forEach(fb=>{ctx.beginPath();ctx.arc(fb.x,fb.y,fb.r,0,Math.PI*2);ctx.fillStyle=fb.color;ctx.fill();",
-    "ctx.lineWidth=2;ctx.strokeStyle='rgba(255,255,255,0.25)';ctx.stroke();ctx.closePath();});",
-    "if(!over){let a=Math.atan2(my-shooter.y,mx-shooter.x),rx=shooter.x,ry=shooter.y,rdx=Math.cos(a),rdy=Math.sin(a);",
-    "ctx.beginPath();ctx.moveTo(rx,ry);for(let i=0;i<400;i++){rx+=rdx*3;ry+=rdy*3;",
-    "if(rx-rad<0){rx=rad;rdx*=-1;ctx.lineTo(rx,ry);}else if(rx+rad>cvs.width){rx=cvs.width-rad;rdx*=-1;ctx.lineTo(rx,ry);}",
-    "if(ry<=25){ctx.lineTo(rx,ry);break;}",
-    "let hit=bubbles.some(b=>b.active&&Math.hypot(rx-b.x,ry-b.y)<rad*1.8);if(hit){ctx.lineTo(rx,ry);break;}}",
-    "ctx.lineTo(rx,ry);ctx.strokeStyle='rgba(255,255,255,0.6)';ctx.setLineDash([4,4]);ctx.stroke();ctx.setLineDash([]);}",
-    "if(bullet){ctx.beginPath();ctx.arc(bullet.x,bullet.y,rad,0,Math.PI*2);ctx.fillStyle=bullet.color;ctx.fill();ctx.closePath();}",
-    "ctx.beginPath();ctx.arc(shooter.x,shooter.y,shooter.r,0,Math.PI*2);ctx.fillStyle=shooter.color;ctx.fill();",
-    "ctx.lineWidth=3;ctx.strokeStyle='#FFF';ctx.stroke();ctx.closePath();",
-    "if(over){ctx.fillStyle='rgba(0,0,0,0.85)';ctx.fillRect(0,0,cvs.width,cvs.height);",
-    "ctx.fillStyle='#FF5964';ctx.font='bold 32px sans-serif';ctx.textAlign='center';ctx.fillText('GAME OVER',cvs.width/2,cvs.height/2-20);",
-    "ctx.fillStyle='#FFF';ctx.font='18px sans-serif';ctx.fillText('Tổng điểm: '+score,cvs.width/2,cvs.height/2+20);",
-    "ctx.fillText('Click chuột để chơi lại',cvs.width/2,cvs.height/2+60);ctx.textAlign='left';}}",
-    "function loop(){update();draw();requestAnimationFrame(loop);}loop();</script></body></html>"
-]
-
-html_code = "".join(html_parts)
-encoded_html = base64.b64encode(html_code.encode("utf-8")).decode("utf-8")
-components.iframe(f"data:text/html;base64,{encoded_html}", height=580)
+    "fallingBubbles.forEach(fb=>{ctx.beginPath();ctx.arc(
