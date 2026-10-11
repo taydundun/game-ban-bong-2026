@@ -5,280 +5,185 @@ import base64
 st.set_page_config(page_title="Game Bắn Bóng", layout="centered")
 
 st.title("🎯 Game Bắn Bóng (Bubble Shooter)")
-st.write("Phiên bản chuẩn xác cuối cùng: Đã khóa chặt hoàn toàn lỗi bám đuôi dọc, bóng chỉ bám vào khe phía trên!")
+st.write("Phiên bản chuẩn xác: Đã chặn hoàn toàn lỗi bám đuôi dọc, bóng chỉ bám lên phía trên và ngang hàng!")
 
-html_code = """
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <style>
-        body { margin: 0; padding: 0; text-align: center; font-family: sans-serif; background: #0f0f1a; color: white; }
-        canvas {
-            background: #1e1e2e;
-            display: block;
-            margin: 10px auto;
-            border-radius: 12px;
-            box-shadow: 0 8px 20px rgba(0,0,0,0.6);
-            cursor: crosshair;
-        }
-    </style>
-</head>
-<body>
-    <canvas id="gameCanvas" width="440" height="540"></canvas>
-    <script>
-        const canvas = document.getElementById("gameCanvas");
-        const ctx = canvas.getContext("2d");
-
-        let score = 0;
-        let shotsSinceLastRow = 0;
-        let gameOver = false;
-        const colors = ["#FF5964", "#35A7FF", "#38B000", "#FFE600", "#9B5DE5"];
-        
-        function getRandomColor() {
-            return colors[Math.floor(Math.random() * colors.length)];
-        }
-
-        let shooter = { x: 220, y: 510, radius: 18, color: getRandomColor() };
-        let bullet = null;
-        let mouseX = 220, mouseY = 0;
-
-        let bubbles = [];
-        const rows = 4;
-        const cols = 10;
-        const radius = 18;
-        const diameter = radius * 2;
-        const rowHeight = radius * 1.732;
-
-        function initBubbles() {
-            bubbles = [];
-            gameOver = false;
-            score = 0;
-            shotsSinceLastRow = 0;
-            for (let r = 0; r < rows; r++) {
-                let colsInRow = (r % 2 === 1) ? cols - 1 : cols;
-                let rowOffsetX = (r % 2 === 1) ? radius : 0;
-                for (let c = 0; c < colsInRow; c++) {
-                    bubbles.push({
-                        row: r,
-                        col: c,
-                        x: 25 + radius + c * diameter + rowOffsetX,
-                        y: 25 + r * rowHeight,
-                        radius: radius,
-                        color: getRandomColor(),
-                        active: true
-                    });
-                }
-            }
-        }
-        initBubbles();
-
-        function addNewRow() {
-            bubbles.forEach(b => {
-                b.y += rowHeight;
-                b.row += 1;
-                if (b.active && b.y >= 430) {
-                    gameOver = true;
-                }
-            });
-
-            let r = 0;
-            let colsInRow = (r % 2 === 1) ? cols - 1 : cols;
-            let rowOffsetX = (r % 2 === 1) ? radius : 0;
-            for (let c = 0; c < colsInRow; c++) {
-                bubbles.unshift({
-                    row: r,
-                    col: c,
-                    x: 25 + radius + c * diameter + rowOffsetX,
-                    y: 25 + r * rowHeight,
-                    radius: radius,
-                    color: getRandomColor(),
-                    active: true
-                });
-            }
-        }
-
-        canvas.addEventListener("mousemove", (e) => {
-            if (gameOver) return;
-            const rect = canvas.getBoundingClientRect();
-            mouseX = e.clientX - rect.left;
-            mouseY = e.clientY - rect.top;
-        });
-
-        canvas.addEventListener("click", () => {
-            if (gameOver) {
-                initBubbles();
-                return;
-            }
-            if (!bullet) {
-                let angle = Math.atan2(mouseY - shooter.y, mouseX - shooter.x);
-                if (angle > -0.1) angle = -0.1;
-                if (angle < -Math.PI + 0.1) angle = -Math.PI + 0.1;
-
-                bullet = {
-                    x: shooter.x,
-                    y: shooter.y,
-                    dx: Math.cos(angle) * 10,
-                    dy: Math.sin(angle) * 10,
-                    color: shooter.color
-                };
-                shooter.color = getRandomColor();
-            }
-        });
-
-        // THUẬT TOÁN BÁM LƯỚI CHUẨN XÁC: CHỈ TÌM Ô TRỐNG NẰM PHÍA TRÊN HOẶC NGANG ĐIỂM CHẠM
-        function snapBulletToGrid(bColor) {
-            let bestSlot = null;
-            let minDist = Infinity;
-
-            for (let r = 0; r < 14; r++) {
-                let colsInRow = (r % 2 === 1) ? cols - 1 : cols;
-                let rowOffsetX = (r % 2 === 1) ? radius : 0;
-                for (let c = 0; c < colsInRow; c++) {
-                    let occupied = bubbles.some(b => b.active && b.row === r && b.col === c);
-                    if (!occupied) {
-                        let targetX = 25 + radius + c * diameter + rowOffsetX;
-                        let targetY = 25 + r * rowHeight;
-
-                        // TUYỆT ĐỐI KHÔNG CHO PHÉP BÁM DƯỚI THẤP HƠN HOẶC NGANG TẦM ĐẠN DỪNG NẾU KHÔNG CÓ BÓNG ĐỠ TRÊN
-                        if (targetY >= bullet.y + radius) continue;
-
-                        let isConnected = (r === 0);
-                        if (!isConnected) {
-                            for (let b of bubbles) {
-                                if (b.active) {
-                                    let distToB = Math.hypot(targetX - b.x, targetY - b.y);
-                                    if (distToB < diameter * 1.15) {
-                                        isConnected = true;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-
-                        if (isConnected) {
-                            let distToBullet = Math.hypot(bullet.x - targetX, bullet.y - targetY);
-                            if (distToBullet < minDist) {
-                                minDist = distToBullet;
-                                bestSlot = { row: r, col: c, x: targetX, y: targetY };
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (bestSlot) {
-                let newBubble = {
-                    row: bestSlot.row,
-                    col: bestSlot.col,
-                    x: bestSlot.x,
-                    y: bestSlot.y,
-                    radius: radius,
-                    color: bColor,
-                    active: true
-                };
-                bubbles.push(newBubble);
-
-                if (newBubble.y >= 430) {
-                    gameOver = true;
-                    return;
-                }
-
-                let poppedCount = checkMatch(newBubble, bColor);
-                if (poppedCount > 0) {
-                    removeFloatingBubbles();
-                } else {
-                    shotsSinceLastRow++;
-                    if (shotsSinceLastRow >= 5) {
-                        addNewRow();
-                        shotsSinceLastRow = 0;
-                    }
-                }
-            }
-        }
-
-        function checkMatch(startBubble, targetColor) {
-            let visited = new Set();
-            let queue = [startBubble];
-            let matched = [];
-
-            visited.add(startBubble);
-            while (queue.length > 0) {
-                let current = queue.shift();
-                if (current.color === targetColor && current.active) {
-                    matched.push(current);
-                    for (let b of bubbles) {
-                        if (b.active && !visited.has(b)) {
-                            let dist = Math.hypot(current.x - b.x, current.y - b.y);
-                            if (dist < diameter * 1.15) {
-                                visited.add(b);
-                                queue.push(b);
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (matched.length >= 3) {
-                matched.forEach(b => {
-                    b.active = false;
-                    score += 20;
-                });
-                return matched.length;
-            }
-            return 0;
-        }
-
-        function removeFloatingBubbles() {
-            let visited = new Set();
-            let queue = [];
-
-            for (let b of bubbles) {
-                if (b.active && b.row === 0) {
-                    visited.add(b);
-                    queue.push(b);
-                }
-            }
-
-            while (queue.length > 0) {
-                let current = queue.shift();
-                for (let b of bubbles) {
-                    if (b.active && !visited.has(b)) {
-                        let dist = Math.hypot(current.x - b.x, current.y - b.y);
-                        if (dist < diameter * 1.15) {
-                            visited.add(b);
-                            queue.push(b);
-                        }
-                    }
-                }
-            }
-
-            bubbles.forEach(b => {
-                if (b.active && !visited.has(b)) {
-                    b.active = false;
-                    score += 30;
-                }
-            });
-        }
-
-        function update() {
-            if (gameOver) return;
-
-            if (bullet) {
-                bullet.x += bullet.dx;
-                bullet.y += bullet.dy;
-
-                // Nảy tường
-                if (bullet.x - radius < 0 || bullet.x + radius > canvas.width) {
-                    bullet.dx *= -1;
-                }
-
-                // Chạm trần
-                if (bullet.y - radius <= 15) {
-                    snapBulletToGrid(bullet.color);
-                    bullet = null;
-                    return;
-                }
-
-                // Va chạm bóng khác
-                for (let
+html_lines = [
+    "<!DOCTYPE html>",
+    "<html>",
+    "<head>",
+    "    <meta charset=\"utf-8\">",
+    "    <style>",
+    "        body { margin: 0; padding: 0; text-align: center; font-family: sans-serif; background: #0f0f1a; color: white; }",
+    "        canvas {",
+    "            background: #1e1e2e;",
+    "            display: block;",
+    "            margin: 10px auto;",
+    "            border-radius: 12px;",
+    "            box-shadow: 0 8px 20px rgba(0,0,0,0.6);",
+    "            cursor: crosshair;",
+    "        }",
+    "    </style>",
+    "</head>",
+    "<body>",
+    "    <canvas id=\"gameCanvas\" width=\"440\" height=\"540\"></canvas>",
+    "    <script>",
+    "        const canvas = document.getElementById(\"gameCanvas\");",
+    "        const ctx = canvas.getContext(\"2d\");",
+    "",
+    "        let score = 0;",
+    "        let shotsSinceLastRow = 0;",
+    "        let gameOver = false;",
+    "        const colors = [\"#FF5964\", \"#35A7FF\", \"#38B000\", \"#FFE600\", \"#9B5DE5\"];",
+    "        ",
+    "        function getRandomColor() {",
+    "            return colors[Math.floor(Math.random() * colors.length)];",
+    "        }",
+    "",
+    "        let shooter = { x: 220, y: 510, radius: 18, color: getRandomColor() };",
+    "        let bullet = null;",
+    "        let mouseX = 220, mouseY = 0;",
+    "",
+    "        let bubbles = [];",
+    "        const rows = 4;",
+    "        const cols = 10;",
+    "        const radius = 18;",
+    "        const diameter = radius * 2;",
+    "        const rowHeight = radius * 1.732;",
+    "",
+    "        function initBubbles() {",
+    "            bubbles = [];",
+    "            gameOver = false;",
+    "            score = 0;",
+    "            shotsSinceLastRow = 0;",
+    "            for (let r = 0; r < rows; r++) {",
+    "                let colsInRow = (r % 2 === 1) ? cols - 1 : cols;",
+    "                let rowOffsetX = (r % 2 === 1) ? radius : 0;",
+    "                for (let c = 0; c < colsInRow; c++) {",
+    "                    bubbles.push({",
+    "                        row: r,",
+    "                        col: c,",
+    "                        x: 25 + radius + c * diameter + rowOffsetX,",
+    "                        y: 25 + r * rowHeight,",
+    "                        radius: radius,",
+    "                        color: getRandomColor(),",
+    "                        active: true",
+    "                    });",
+    "                }",
+    "            }",
+    "        }",
+    "        initBubbles();",
+    "",
+    "        function addNewRow() {",
+    "            bubbles.forEach(b => {",
+    "                b.y += rowHeight;",
+    "                b.row += 1;",
+    "                if (b.active && b.y >= 430) {",
+    "                    gameOver = true;",
+    "                }",
+    "            });",
+    "",
+    "            let r = 0;",
+    "            let colsInRow = (r % 2 === 1) ? cols - 1 : cols;",
+    "            let rowOffsetX = (r % 2 === 1) ? radius : 0;",
+    "            for (let c = 0; c < colsInRow; c++) {",
+    "                bubbles.unshift({",
+    "                    row: r,",
+    "                    col: c,",
+    "                    x: 25 + radius + c * diameter + rowOffsetX,",
+    "                    y: 25 + r * rowHeight,",
+    "                    radius: radius,",
+    "                    color: getRandomColor(),",
+    "                    active: true",
+    "                });",
+    "            }",
+    "        }",
+    "",
+    "        canvas.addEventListener(\"mousemove\", (e) => {",
+    "            if (gameOver) return;",
+    "            const rect = canvas.getBoundingClientRect();",
+    "            mouseX = e.clientX - rect.left;",
+    "            mouseY = e.clientY - rect.top;",
+    "        });",
+    "",
+    "        canvas.addEventListener(\"click\", () => {",
+    "            if (gameOver) {",
+    "                initBubbles();",
+    "                return;",
+    "            }",
+    "            if (!bullet) {",
+    "                let angle = Math.atan2(mouseY - shooter.y, mouseX - shooter.x);",
+    "                if (angle > -0.1) angle = -0.1;",
+    "                if (angle < -Math.PI + 0.1) angle = -Math.PI + 0.1;",
+    "",
+    "                bullet = {",
+    "                    x: shooter.x,",
+    "                    y: shooter.y,",
+    "                    dx: Math.cos(angle) * 10,",
+    "                    dy: Math.sin(angle) * 10,",
+    "                    color: shooter.color",
+    "                };",
+    "                shooter.color = getRandomColor();",
+    "            }",
+    "        });",
+    "",
+    "        // CHỈ TÌM Ô TRỐNG PHÍA TRÊN HOẶC NGANG HÀNG (LOẠI BỎ HOÀN TOÀN HÀNG DƯỚI r+1)",
+    "        function snapToHitBubble(hitBubble, bColor) {",
+    "            let r = hitBubble.row;",
+    "            let c = hitBubble.col;",
+    "            let neighbors = [];",
+    "",
+    "            if (r % 2 === 0) {",
+    "                neighbors = [",
+    "                    {r: r-1, c: c-1}, {r: r-1, c: c},",
+    "                    {r: r, c: c-1}, {r: r, c: c+1}",
+    "                ];",
+    "            } else {",
+    "                neighbors = [",
+    "                    {r: r-1, c: c}, {r: r-1, c: c+1},",
+    "                    {r: r, c: c-1}, {r: r, c: c+1}",
+    "                ];",
+    "            }",
+    "",
+    "            let bestSlot = null;",
+    "            let minDist = Infinity;",
+    "",
+    "            for (let n of neighbors) {",
+    "                let colsInRow = (n.r % 2 === 1) ? cols - 1 : cols;",
+    "                if (n.r >= 0 && n.c >= 0 && n.c < colsInRow) {",
+    "                    let occupied = bubbles.some(b => b.active && b.row === n.r && b.col === n.c);",
+    "                    if (!occupied) {",
+    "                        let rowOffsetX = (n.r % 2 === 1) ? radius : 0;",
+    "                        let targetX = 25 + radius + n.c * diameter + rowOffsetX;",
+    "                        let targetY = 25 + n.r * rowHeight;",
+    "",
+    "                        let dist = Math.hypot(bullet.x - targetX, bullet.y - targetY);",
+    "                        if (dist < minDist) {",
+    "                            minDist = dist;",
+    "                            bestSlot = { row: n.r, col: n.c, x: targetX, y: targetY };",
+    "                        }",
+    "                    }",
+    "                }",
+    "            }",
+    "",
+    "            // Fallback an toàn nếu các ô trên/ngang bị kín",
+    "            if (!bestSlot) {",
+    "                bestSlot = { row: Math.max(0, r-1), col: c, x: hitBubble.x, y: hitBubble.y - rowHeight };",
+    "            }",
+    "",
+    "            if (bestSlot) {",
+    "                let newBubble = {",
+    "                    row: bestSlot.row,",
+    "                    col: bestSlot.col,",
+    "                    x: bestSlot.x,",
+    "                    y: bestSlot.y,",
+    "                    radius: radius,",
+    "                    color: bColor,",
+    "                    active: true",
+    "                };",
+    "                bubbles.push(newBubble);",
+    "",
+    "                if (newBubble.y >= 430) {",
+    "                    gameOver = true;",
+    "                    return;",
+    "                }",
+    "",
