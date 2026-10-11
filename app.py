@@ -57,34 +57,39 @@ function getNeighbors(r, c) {
     return (r % 2 === 0) ? [{r: r-1, c: c-1}, {r: r-1, c: c}, {r: r, c: c-1}, {r: r, c: c+1}, {r: r+1, c: c-1}, {r: r+1, c: c}] : [{r: r-1, c: c}, {r: r-1, c: c+1}, {r: r, c: c-1}, {r: r, c: c+1}, {r: r+1, c: c}, {r: r+1, c: c+1}];
 }
 
-function findBestEmptyCell(x, y) {
-    let bestCell = null, minD = Infinity;
-    
-    // Duyệt qua toàn bộ lưới tọa độ để tìm ô trống tối ưu nhất
-    for (let r = 0; r < 15; r++) {
-        let maxC = (r % 2 === 1) ? 9 : 10;
-        let offX = (r % 2 === 1) ? rad : 0;
-        for (let c = 0; c < maxC; c++) {
-            let occupied = bubbles.some(b => b.active && b.row === r && b.col === c);
+function snapToGrid(hitB, bCol) {
+    let nList = getNeighbors(hitB.row, hitB.col);
+    let bestCell = null, minScore = Infinity;
+    let impactAngle = Math.atan2(bullet.y - hitB.y, bullet.x - hitB.x);
+
+    // Tìm ô lân cận trống khớp nhất với góc va chạm của viên đạn
+    for (let n of nList) {
+        let maxC = (n.r % 2 === 1) ? 9 : 10;
+        if (n.r >= 0 && n.r < 15 && n.c >= 0 && n.c < maxC) {
+            let occupied = bubbles.some(b => b.active && b.row === n.r && b.col === n.c);
             if (!occupied) {
-                // Kiểm tra xem ô này có nằm sát trần (row === 0) hoặc có tiếp giáp với quả bóng nào đang hiện diện không
-                let hasActiveNeighbor = (r === 0) || getNeighbors(r, c).some(n => bubbles.some(b => b.active && b.row === n.r && b.col === n.c));
-                if (hasActiveNeighbor) {
-                    let tx = 25 + rad + c * dia + offX;
-                    let ty = 25 + r * rH;
-                    let d = Math.hypot(x - tx, y - ty);
-                    if (d < minD) {
-                        minD = d;
-                        bestCell = { row: r, col: c, x: tx, y: ty };
-                    }
+                let offX = (n.r % 2 === 1) ? rad : 0;
+                let tx = 25 + rad + n.c * dia + offX;
+                let ty = 25 + n.r * rH;
+                
+                let angleToCell = Math.atan2(ty - hitB.y, tx - hitB.x);
+                let angleDiff = Math.abs(impactAngle - angleToCell);
+                if (angleDiff > Math.PI) angleDiff = Math.PI * 2 - angleDiff;
+                
+                let dist = Math.hypot(bullet.x - tx, bullet.y - ty);
+                let scoreVal = angleDiff * 20 + dist; // Kết hợp góc và khoảng cách để chọn ô chính xác nhất
+
+                if (scoreVal < minScore) {
+                    minScore = scoreVal;
+                    bestCell = { row: n.r, col: n.c, x: tx, y: ty };
                 }
             }
         }
     }
-    
-    // Fallback dự phòng nếu không tìm thấy ô tiếp giáp
+
+    // Nếu không tìm được ô lân cận theo góc, quét toàn bộ ô trống gần vị trí đạn nhất để tuyệt đối không mất bóng
     if (!bestCell) {
-        minD = Infinity;
+        let minD = Infinity;
         for (let r = 0; r < 15; r++) {
             let maxC = (r % 2 === 1) ? 9 : 10;
             let offX = (r % 2 === 1) ? rad : 0;
@@ -92,24 +97,30 @@ function findBestEmptyCell(x, y) {
                 if (!bubbles.some(b => b.active && b.row === r && b.col === c)) {
                     let tx = 25 + rad + c * dia + offX;
                     let ty = 25 + r * rH;
-                    let d = Math.hypot(x - tx, y - ty);
+                    let d = Math.hypot(bullet.x - tx, bullet.y - ty);
                     if (d < minD) { minD = d; bestCell = { row: r, col: c, x: tx, y: ty }; }
                 }
             }
         }
     }
-    return bestCell;
-}
 
-function handleCollision(bCol) {
-    let target = findBestEmptyCell(bullet.x, bullet.y);
-    if (target) {
-        let nb = { row: target.row, col: target.col, x: target.x, y: target.y, r: rad, color: bCol, active: true };
+    if (bestCell) {
+        let nb = { row: bestCell.row, col: bestCell.col, x: bestCell.x, y: bestCell.y, r: rad, color: bCol, active: true };
         bubbles.push(nb);
         if (nb.y >= 430) { over = true; return; }
         if (match(nb, bCol) > 0) { floatCheck(); }
         else { shots++; if (shots >= 5) { addRow(); shots = 0; } }
     }
+}
+
+function snapCeiling(bCol) {
+    let ac = Math.max(0, Math.min(9, Math.round((bullet.x - 25 - rad) / dia)));
+    if (bubbles.some(b => b.active && b.row === 0 && b.col === ac)) {
+        for (let c = 0; c < 10; c++) { if (!bubbles.some(b => b.active && b.row === 0 && b.col === c)) { ac = c; break; } }
+    }
+    let nb = { row: 0, col: ac, x: 25 + rad + ac * dia, y: 25, r: rad, color: bCol, active: true };
+    bubbles.push(nb);
+    if (match(nb, bCol) > 0) { floatCheck(); } else { shots++; if (shots >= 5) { addRow(); shots = 0; } }
 }
 
 function match(startB, tCol) {
@@ -151,76 +162,15 @@ function update() {
     if (over) return;
     if (bullet) {
         bullet.x += bullet.dx; bullet.y += bullet.dy;
-        if (bullet.x - rad < 0 || bullet.x + rad > cvs.width) bullet.dx *= -1;
-        if (bullet.y - rad <= 15) {
-            handleCollision(bullet.color);
-            bullet = null;
-            return;
-        }
+        if (bullet.x - rad < 0) { bullet.x = rad; bullet.dx *= -1; }
+        if (bullet.x + rad > cvs.width) { bullet.x = cvs.width - rad; bullet.dx *= -1; }
+        if (bullet.y - rad <= 15) { snapCeiling(bullet.color); bullet = null; return; }
         for (let b of bubbles) {
             if (b.active && Math.hypot(bullet.x - b.x, bullet.y - b.y) <= dia) {
-                handleCollision(bullet.color);
+                snapToGrid(b, bullet.color);
                 bullet = null;
                 break;
             }
         }
     }
-    fallingBubbles.forEach(fb => { fb.y += fb.dy; fb.x += fb.dx; fb.dy += 0.5; });
-    fallingBubbles = fallingBubbles.filter(fb => fb.y < cvs.height + 50);
-}
-
-function draw() {
-    ctx.clearRect(0, 0, cvs.width, cvs.height);
-    ctx.fillStyle = "#FFF"; ctx.font = "bold 16px sans-serif";
-    ctx.fillText("Điểm: " + score, 20, 25); ctx.fillText("Chờ hàng: " + (5 - shots), 310, 25);
-
-    bubbles.forEach(b => {
-        if (b.active) {
-            ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
-            ctx.fillStyle = b.color; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = "rgba(255,255,255,0.25)"; ctx.stroke(); ctx.closePath();
-        }
-    });
-
-    fallingBubbles.forEach(fb => {
-        ctx.beginPath(); ctx.arc(fb.x, fb.y, fb.r, 0, Math.PI * 2);
-        ctx.fillStyle = fb.color; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = "rgba(255,255,255,0.25)"; ctx.stroke(); ctx.closePath();
-    });
-
-    if (!over) {
-        let a = Math.atan2(my - shooter.y, mx - shooter.x), rx = shooter.x, ry = shooter.y, rdx = Math.cos(a), rdy = Math.sin(a);
-        ctx.beginPath(); ctx.moveTo(rx, ry);
-        for (let i = 0; i < 400; i++) {
-            rx += rdx * 3; ry += rdy * 3;
-            if (rx - rad < 0) { rx = rad; rdx *= -1; ctx.lineTo(rx, ry); }
-            else if (rx + rad > cvs.width) { rx = cvs.width - rad; rdx *= -1; ctx.lineTo(rx, ry); }
-            if (ry <= 25) { ctx.lineTo(rx, ry); break; }
-            if (bubbles.some(b => b.active && Math.hypot(rx - b.x, ry - b.y) < rad * 1.8)) { ctx.lineTo(rx, ry); break; }
-        }
-        ctx.lineTo(rx, ry); ctx.strokeStyle = "rgba(255, 255, 255, 0.6)"; ctx.setLineDash([4, 4]); ctx.stroke(); ctx.setLineDash([]);
-    }
-
-    if (bullet) {
-        ctx.beginPath(); ctx.arc(bullet.x, bullet.y, rad, 0, Math.PI * 2); ctx.fillStyle = bullet.color; ctx.fill(); ctx.closePath();
-    }
-
-    ctx.beginPath(); ctx.arc(shooter.x, shooter.y, shooter.r, 0, Math.PI * 2); ctx.fillStyle = shooter.color; ctx.fill();
-    ctx.lineWidth = 3; ctx.strokeStyle = "#FFF"; ctx.stroke(); ctx.closePath();
-
-    if (over) {
-        ctx.fillStyle = "rgba(0, 0, 0, 0.85)"; ctx.fillRect(0, 0, cvs.width, cvs.height);
-        ctx.fillStyle = "#FF5964"; ctx.font = "bold 32px sans-serif"; ctx.textAlign = "center";
-        ctx.fillText("GAME OVER", cvs.width / 2, cvs.height / 2 - 20);
-        ctx.fillStyle = "#FFF"; ctx.font = "18px sans-serif"; ctx.fillText("Tổng điểm: " + score, cvs.width / 2, cvs.height / 2 + 20);
-        ctx.fillText("Click chuột để chơi lại", cvs.width / 2, cvs.height / 2 + 60); ctx.textAlign = "left";
-    }
-}
-
-function loop() { update(); draw(); requestAnimationFrame(loop); }
-loop();
-</script>
-</body>
-</html>
-"""
-
-encoded_html = base64.b64encode(html_code.encode("utf-8")).decode("utf-8")
-components.iframe(f"data:text/html;base64,{encoded_html}", height=580)
+    fallingBubbles.forEach(fb =>
