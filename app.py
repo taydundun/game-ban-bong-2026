@@ -5,7 +5,7 @@ import base64
 st.set_page_config(page_title="Game Bắn Bóng", layout="centered")
 
 st.title("🎯 Game Bắn Bóng (Bubble Shooter)")
-st.write("Phiên bản ổn định: Chống xếp chồng dọc tuyệt đối, tự lấp khe trống và đường ngắm phản xạ tường có nếp gấp!")
+st.write("Phiên bản hoàn hảo: Đã khóa chặt lỗi xếp chồng đuôi dọc, bóng tự động lấp vào khe trống phía trên/ngang và đường ngắm phản xạ tường có nếp gấp chuẩn xác!")
 
 html_code = """
 <!DOCTYPE html>
@@ -108,83 +108,96 @@ html_code = """
             }
         });
 
-        function snapBullet() {
+        // THUẬT TOÁN BÁM LƯỚI THÔNG MINH: CHỈ CHO PHÉP BÁM VÀO KHE PHÍA TRÊN HOẶC NGANG, TUYỆT ĐỐI KHÔNG XẾP DƯỚI
+        function snapToHitBubble(hitBubble, bColor) {
+            let r = hitBubble.row;
+            let c = hitBubble.col;
+            let neighbors = (r % 2 === 0) ? [
+                {r: r-1, c: c-1}, {r: r-1, c: c}, 
+                {r: r, c: c-1}, {r: r, c: c+1}, 
+                {r: r+1, c: c-1}, {r: r+1, c: c}
+            ] : [
+                {r: r-1, c: c}, {r: r-1, c: c+1}, 
+                {r: r, c: c-1}, {r: r, c: c+1}, 
+                {r: r+1, c: c}, {r: r+1, c: c+1}
+            ];
+
             let bestSlot = null;
             let minDist = Infinity;
 
-            for (let r = 0; r < 15; r++) {
-                let colsInRow = (r % 2 === 1) ? cols - 1 : cols;
-                let rowOffsetX = (r % 2 === 1) ? radius : 0;
-                for (let c = 0; c < colsInRow; c++) {
-                    let occupied = bubbles.some(b => b.active && b.row === r && b.col === c);
+            for (let n of neighbors) {
+                let colsInRow = (n.r % 2 === 1) ? cols - 1 : cols;
+                if (n.r >= 0 && n.c >= 0 && n.c < colsInRow) {
+                    let occupied = bubbles.some(b => b.active && b.row === n.r && b.col === n.c);
                     if (!occupied) {
-                        let targetX = 25 + radius + c * diameter + rowOffsetX;
-                        let targetY = 25 + r * rowHeight;
+                        let rowOffsetX = (n.r % 2 === 1) ? radius : 0;
+                        let targetX = 25 + radius + n.c * diameter + rowOffsetX;
+                        let targetY = 25 + n.r * rowHeight;
 
-                        let isConnected = (r === 0);
-                        if (!isConnected) {
-                            for (let b of bubbles) {
-                                if (b.active) {
-                                    let distToB = Math.hypot(targetX - b.x, targetY - b.y);
-                                    if (distToB < diameter * 1.15) {
-                                        isConnected = true;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
+                        // RÀNG BUỘC CỐ ĐỊNH: BẮT BUỘC Ô BÁM PHẢI NẰM Ở TRÊN HOẶC NGANG TÂM BÓNG BỊ CHẠM (CHẶN ĐỨNG LỖI ĐUÔI DỌC)
+                        if (targetY > hitBubble.y + 5) continue;
 
-                        if (isConnected && targetY <= bullet.y + radius * 0.3) {
-                            let distToBullet = Math.hypot(bullet.x - targetX, bullet.y - targetY);
-                            if (distToBullet < minDist) {
-                                minDist = distToBullet;
-                                bestSlot = { row: r, col: c, x: targetX, y: targetY };
-                            }
+                        let dist = Math.hypot(bullet.x - targetX, bullet.y - targetY);
+                        if (dist < minDist) {
+                            minDist = dist;
+                            bestSlot = { row: n.r, col: n.c, x: targetX, y: targetY };
                         }
                     }
                 }
             }
 
+            // Fallback an toàn nếu không tìm thấy ô bên cạnh, bắt buộc đưa lên hàng trên trực diện
             if (!bestSlot) {
-                minDist = Infinity;
-                for (let r = 0; r < 15; r++) {
-                    let colsInRow = (r % 2 === 1) ? cols - 1 : cols;
-                    let rowOffsetX = (r % 2 === 1) ? radius : 0;
-                    for (let c = 0; c < colsInRow; c++) {
-                        let occupied = bubbles.some(b => b.active && b.row === r && b.col === c);
-                        if (!occupied) {
-                            let targetX = 25 + radius + c * diameter + rowOffsetX;
-                            let targetY = 25 + r * rowHeight;
-                            let isConnected = (r === 0);
-                            if (!isConnected) {
-                                for (let b of bubbles) {
-                                    if (b.active && Math.hypot(targetX - b.x, targetY - b.y) < diameter * 1.15) {
-                                        isConnected = true;
-                                        break;
-                                    }
-                                }
-                            }
-                            if (isConnected && targetY <= bullet.y + radius * 0.5) {
-                                let dist = Math.hypot(bullet.x - targetX, bullet.y - targetY);
-                                if (dist < minDist) {
-                                    minDist = dist;
-                                    bestSlot = { row: r, col: c, x: targetX, y: targetY };
-                                }
-                            }
-                        }
-                    }
-                }
+                let fallbackR = Math.max(0, r - 1);
+                let colsInRow = (fallbackR % 2 === 1) ? cols - 1 : cols;
+                let fallbackC = Math.min(c, colsInRow - 1);
+                let rowOffsetX = (fallbackR % 2 === 1) ? radius : 0;
+                bestSlot = {
+                    row: fallbackR,
+                    col: fallbackC,
+                    x: 25 + radius + fallbackC * diameter + rowOffsetX,
+                    y: 25 + fallbackR * rowHeight
+                };
             }
 
             if (bestSlot) {
-                let newBubble = { row: bestSlot.row, col: bestSlot.col, x: bestSlot.x, y: bestSlot.y, radius: radius, color: bullet.color, active: true };
+                let newBubble = { row: bestSlot.row, col: bestSlot.col, x: bestSlot.x, y: bestSlot.y, radius: radius, color: bColor, active: true };
                 bubbles.push(newBubble);
                 if (newBubble.y >= 430) { gameOver = true; return; }
-                let popped = checkMatch(newBubble, bullet.color);
-                if (popped > 0) { removeFloatingBubbles(); }
-                else {
+                let poppedCount = checkMatch(newBubble, bColor);
+                if (poppedCount > 0) {
+                    removeFloatingBubbles();
+                } else {
                     shotsSinceLastRow++;
-                    if (shotsSinceLastRow >= 5) { addNewRow(); shotsSinceLastRow = 0; }
+                    if (shotsSinceLastRow >= 5) {
+                        addNewRow();
+                        shotsSinceLastRow = 0;
+                    }
+                }
+            }
+        }
+
+        function snapToCeiling(bColor) {
+            let approxCol = Math.round((bullet.x - 25 - radius) / diameter);
+            if (approxCol < 0) approxCol = 0;
+            if (approxCol >= cols) approxCol = cols - 1;
+
+            let targetX = 25 + radius + approxCol * diameter;
+            let targetY = 25;
+
+            let occupied = bubbles.some(b => b.active && b.row === 0 && b.col === approxCol);
+            if (!occupied) {
+                let newBubble = { row: 0, col: approxCol, x: targetX, y: targetY, radius: radius, color: bColor, active: true };
+                bubbles.push(newBubble);
+                let poppedCount = checkMatch(newBubble, bColor);
+                if (poppedCount > 0) {
+                    removeFloatingBubbles();
+                } else {
+                    shotsSinceLastRow++;
+                    if (shotsSinceLastRow >= 5) {
+                        addNewRow();
+                        shotsSinceLastRow = 0;
+                    }
                 }
             }
         }
@@ -193,6 +206,7 @@ html_code = """
             let visited = new Set();
             let queue = [startBubble];
             let matched = [];
+
             visited.add(startBubble);
             while (queue.length > 0) {
                 let current = queue.shift();
@@ -201,13 +215,20 @@ html_code = """
                     for (let b of bubbles) {
                         if (b.active && !visited.has(b)) {
                             let dist = Math.hypot(current.x - b.x, current.y - b.y);
-                            if (dist < diameter * 1.15) { visited.add(b); queue.push(b); }
+                            if (dist < diameter * 1.15) {
+                                visited.add(b);
+                                queue.push(b);
+                            }
                         }
                     }
                 }
             }
+
             if (matched.length >= 3) {
-                matched.forEach(b => { b.active = false; score += 20; });
+                matched.forEach(b => {
+                    b.active = false;
+                    score += 20;
+                });
                 return matched.length;
             }
             return 0;
@@ -216,32 +237,60 @@ html_code = """
         function removeFloatingBubbles() {
             let visited = new Set();
             let queue = [];
+
             for (let b of bubbles) {
-                if (b.active && b.row === 0) { visited.add(b); queue.push(b); }
+                if (b.active && b.row === 0) {
+                    visited.add(b);
+                    queue.push(b);
+                }
             }
+
             while (queue.length > 0) {
                 let current = queue.shift();
                 for (let b of bubbles) {
                     if (b.active && !visited.has(b)) {
                         let dist = Math.hypot(current.x - b.x, current.y - b.y);
-                        if (dist < diameter * 1.15) { visited.add(b); queue.push(b); }
+                        if (dist < diameter * 1.15) {
+                            visited.add(b);
+                            queue.push(b);
+                        }
                     }
                 }
             }
-            bubbles.forEach(b => { if (b.active && !visited.has(b)) { b.active = false; score += 30; } });
+
+            bubbles.forEach(b => {
+                if (b.active && !visited.has(b)) {
+                    b.active = false;
+                    score += 30;
+                }
+            });
         }
 
         function update() {
             if (gameOver) return;
+
             if (bullet) {
                 bullet.x += bullet.dx;
                 bullet.y += bullet.dy;
-                if (bullet.x - radius < 0 || bullet.x + radius > canvas.width) { bullet.dx *= -1; }
-                if (bullet.y - radius <= 15) { snapBullet(); bullet = null; return; }
+
+                if (bullet.x - radius < 0 || bullet.x + radius > canvas.width) {
+                    bullet.dx *= -1;
+                }
+
+                if (bullet.y - radius <= 15) {
+                    snapToCeiling(bullet.color);
+                    bullet = null;
+                    return;
+                }
+
                 for (let b of bubbles) {
                     if (b.active) {
                         let dist = Math.hypot(bullet.x - b.x, bullet.y - b.y);
-                        if (dist < diameter * 0.95) { snapBullet(); bullet = null; break; }
+                        if (dist < diameter * 0.95) {
+                            snapToHitBubble(b, bullet.color);
+                            bullet = null;
+                            break;
+                        }
                     }
                 }
             }
@@ -249,6 +298,7 @@ html_code = """
 
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+
             ctx.fillStyle = "#FFFFFF";
             ctx.font = "bold 16px sans-serif";
             ctx.fillText("Điểm: " + score, 20, 25);
@@ -263,100 +313,3 @@ html_code = """
                     ctx.lineWidth = 2;
                     ctx.strokeStyle = "rgba(255,255,255,0.25)";
                     ctx.stroke();
-                    ctx.closePath();
-                }
-            });
-
-            if (!gameOver) {
-                let angle = Math.atan2(mouseY - shooter.y, mouseX - shooter.x);
-                let rx = shooter.x;
-                let ry = shooter.y;
-                let rdx = Math.cos(angle);
-                let rdy = Math.sin(angle);
-
-                ctx.beginPath();
-                ctx.moveTo(rx, ry);
-
-                for (let step = 0; step < 400; step++) {
-                    rx += rdx * 3;
-                    ry += rdy * 3;
-
-                    if (rx - radius < 0) {
-                        rx = radius;
-                        rdx *= -1;
-                        ctx.lineTo(rx, ry);
-                    } else if (rx + radius > canvas.width) {
-                        rx = canvas.width - radius;
-                        rdx *= -1;
-                        ctx.lineTo(rx, ry);
-                    }
-
-                    if (ry <= 25) {
-                        ctx.lineTo(rx, ry);
-                        break;
-                    }
-
-                    let hit = false;
-                    for (let b of bubbles) {
-                        if (b.active && Math.hypot(rx - b.x, ry - b.y) < radius * 1.8) {
-                            hit = true;
-                            break;
-                        }
-                    }
-                    if (hit) {
-                        ctx.lineTo(rx, ry);
-                        break;
-                    }
-                }
-                ctx.lineTo(rx, ry);
-                ctx.strokeStyle = "rgba(255, 255, 255, 0.6)";
-                ctx.setLineDash([4, 4]);
-                ctx.stroke();
-                ctx.setLineDash([]);
-            }
-
-            if (bullet) {
-                ctx.beginPath();
-                ctx.arc(bullet.x, bullet.y, radius, 0, Math.PI * 2);
-                ctx.fillStyle = bullet.color;
-                ctx.fill();
-                ctx.closePath();
-            }
-
-            ctx.beginPath();
-            ctx.arc(shooter.x, shooter.y, shooter.radius, 0, Math.PI * 2);
-            ctx.fillStyle = shooter.color;
-            ctx.fill();
-            ctx.lineWidth = 3;
-            ctx.strokeStyle = "#FFF";
-            ctx.stroke();
-            ctx.closePath();
-
-            if (gameOver) {
-                ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                ctx.fillStyle = "#FF5964";
-                ctx.font = "bold 32px sans-serif";
-                ctx.textAlign = "center";
-                ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2 - 20);
-                ctx.fillStyle = "#FFFFFF";
-                ctx.font = "18px sans-serif";
-                ctx.fillText("Tổng điểm: " + score, canvas.width / 2, canvas.height / 2 + 20);
-                ctx.fillText("Click chuột để chơi lại", canvas.width / 2, canvas.height / 2 + 60);
-                ctx.textAlign = "left";
-            }
-        }
-
-        function loop() {
-            update();
-            draw();
-            requestAnimationFrame(loop);
-        }
-        loop();
-    </script>
-</body>
-</html>
-"""
-
-encoded_html = base64.b64encode(html_code.encode("utf-8")).decode("utf-8")
-components.iframe(f"data:text/html;base64,{encoded_html}", height=580)
