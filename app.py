@@ -6,7 +6,7 @@ st.set_page_config(page_title="Game Bắn Bóng", layout="centered")
 st.title("🎯 Game Bắn Bóng (Bubble Shooter)")
 st.write("Game Bubble Shooter chuẩn chỉnh: Lưới bóng so le, ngắm bắn dính lưới, nổ cụm màu và tiến hàng mới!")
 
-game_code = """
+game_code = r"""
 <!DOCTYPE html>
 <html>
 <head>
@@ -45,7 +45,7 @@ game_code = """
         const cols = 10;
         const radius = 18;
         const diameter = radius * 2;
-        const rowHeight = radius * Math.sqrt(3); // Khoảng cách chuẩn lưới lục giác
+        const rowHeight = radius * 1.732;
 
         function initBubbles() {
             bubbles = [];
@@ -68,13 +68,11 @@ game_code = """
         initBubbles();
 
         function addNewRow() {
-            // Đẩy toàn bộ bóng cũ xuống
             bubbles.forEach(b => {
                 b.y += rowHeight;
                 b.row += 1;
             });
 
-            // Thêm hàng mới ở trên cùng
             let r = 0;
             let colsInRow = (r % 2 === 1) ? cols - 1 : cols;
             let rowOffsetX = (r % 2 === 1) ? radius : 0;
@@ -115,10 +113,6 @@ game_code = """
         });
 
         function snapBulletToGrid(bColor) {
-            // Tìm ô lưới gần nhất để gắn đạn vào vị trí chính xác
-            let bestX = bullet.x;
-            let bestY = bullet.y;
-            
             let approxRow = Math.round((bullet.y - 25) / rowHeight);
             if (approxRow < 0) approxRow = 0;
             
@@ -144,11 +138,9 @@ game_code = """
 
             bubbles.push(newBubble);
 
-            // Kiểm tra cụm màu để nổ
             let poppedCount = checkMatch(newBubble, bColor);
             
             if (poppedCount === 0) {
-                // Nếu bắn không nổ, tích lũy lượt bắn để đẩy hàng mới xuống
                 shotsSinceLastRow++;
                 if (shotsSinceLastRow >= 4) {
                     addNewRow();
@@ -172,7 +164,7 @@ game_code = """
                     for (let b of bubbles) {
                         if (b.active && !visited.has(b)) {
                             let dist = Math.hypot(current.x - b.x, current.y - b.y);
-                            if (dist < diameter * 1.15) { // Khoảng cách hàng xóm chuẩn lục giác
+                            if (dist < diameter * 1.15) {
                                 visited.add(b);
                                 queue.push(b);
                             }
@@ -181,7 +173,6 @@ game_code = """
                 }
             }
 
-            // Nếu từ 3 quả trở lên thì nổ
             if (matched.length >= 3) {
                 matched.forEach(b => {
                     b.active = false;
@@ -189,7 +180,6 @@ game_code = """
                 });
                 return matched.length;
             } else {
-                // Trả về 0 nếu không đủ cụm để nổ
                 return 0;
             }
         }
@@ -199,23 +189,49 @@ game_code = """
                 bullet.x += bullet.dx;
                 bullet.y += bullet.dy;
 
-                // Va chạm tường trái/phải
                 if (bullet.x - radius < 0 || bullet.x + radius > canvas.width) {
                     bullet.dx *= -1;
                 }
 
-                // Chạm trần trên cùng
                 if (bullet.y - radius <= 15) {
                     snapBulletToGrid(bullet.color);
                     bullet = null;
                     return;
                 }
 
-                // Va chạm với các bóng khác trên lưới
                 for (let b of bubbles) {
                     if (b.active) {
                         let dist = Math.hypot(bullet.x - b.x, bullet.y - b.y);
                         if (dist < diameter * 0.95) {
                             snapBulletToGrid(bullet.color);
                             bullet = null;
-                            break
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = "#FFFFFF";
+            ctx.font = "bold 16px sans-serif";
+            ctx.fillText("Điểm: " + score, 20, 25);
+
+            bubbles.forEach(b => {
+                if (b.active) {
+                    ctx.beginPath();
+                    ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = b.color;
+                    ctx.fill();
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = "rgba(255,255,255,0.25)";
+                    ctx.stroke();
+                    ctx.closePath();
+                }
+            });
+
+            ctx.beginPath();
+            ctx.moveTo(shooter.x, shooter.y);
+            ctx.lineTo(mouseX, mouseY);
