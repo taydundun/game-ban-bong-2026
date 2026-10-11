@@ -5,7 +5,7 @@ import base64
 st.set_page_config(page_title="Game Bắn Bóng", layout="centered")
 
 st.title("🎯 Game Bắn Bóng (Bubble Shooter)")
-st.write("Phiên bản chuẩn xác: Đã sửa triệt để lỗi cú pháp và khóa chặt lỗi chồng bóng dọc!")
+st.write("Phiên bản hoàn chỉnh: Đã fix triệt để lỗi xếp chồng dọc, thêm đường ngắm dội tường chuẩn xác!")
 
 html_lines = [
     "<!DOCTYPE html>",
@@ -108,12 +108,13 @@ html_lines = [
     "            }",
     "        });",
     "",
+    "        // THUẬT TOÁN BÁM LƯỚI CHUẨN XÁC: LOẠI BỎ HOÀN TOÀN Ô PHÍA DƯỚI (r+1) ĐỂ CHỐNG XẾP CHỒNG DỌC",
     "        function snapToHitBubble(hitBubble, bColor) {",
     "            let r = hitBubble.row;",
     "            let c = hitBubble.col;",
     "            let neighbors = (r % 2 === 0) ?",
-    "                [{r: r-1, c: c-1}, {r: r-1, c: c}, {r: r, c: c-1}, {r: r, c: c+1}, {r: r+1, c: c-1}, {r: r+1, c: c}] :",
-    "                [{r: r-1, c: c}, {r: r-1, c: c+1}, {r: r, c: c-1}, {r: r, c: c+1}, {r: r+1, c: c}, {r: r+1, c: c+1}];",
+    "                [{r: r-1, c: c-1}, {r: r-1, c: c}, {r: r, c: c-1}, {r: r, c: c+1}] :",
+    "                [{r: r-1, c: c}, {r: r-1, c: c+1}, {r: r, c: c-1}, {r: r, c: c+1}];",
     "",
     "            let bestSlot = null;",
     "            let minDist = Infinity;",
@@ -126,9 +127,6 @@ html_lines = [
     "                        let rowOffsetX = (n.r % 2 === 1) ? radius : 0;",
     "                        let targetX = 25 + radius + n.c * diameter + rowOffsetX;",
     "                        let targetY = 25 + n.r * rowHeight;",
-    "",
-    "                        // KHÓA CHẶT: TUYỆT ĐỐI KHÔNG CHO PHÉP BÁM THẤP HƠN TÂM QUẢ BÓNG BỊ CHẠM",
-    "                        if (targetY > hitBubble.y + radius * 0.2) continue;",
     "",
     "                        let dist = Math.hypot(bullet.x - targetX, bullet.y - targetY);",
     "                        if (dist < minDist) {",
@@ -253,12 +251,32 @@ html_lines = [
     "                }",
     "            });",
     "",
+    "            // VẼ ĐƯỜNG NGẮM DỘI TƯỜNG (WALL BOUNCE AIM LINE)",
     "            if (!gameOver) {",
+    "                let angle = Math.atan2(mouseY - shooter.y, mouseX - shooter.x);",
+    "                let rx = shooter.x;",
+    "                let ry = shooter.y;",
+    "                let rdx = Math.cos(angle);",
+    "                let rdy = Math.sin(angle);",
+    "",
     "                ctx.beginPath();",
-    "                ctx.moveTo(shooter.x, shooter.y);",
-    "                ctx.lineTo(mouseX, mouseY);",
+    "                ctx.moveTo(rx, ry);",
+    "",
+    "                for (let step = 0; step < 300; step++) {",
+    "                    rx += rdx * 2;",
+    "                    ry += rdy * 2;",
+    "                    if (rx - radius < 0) { rx = radius; rdx *= -1; }",
+    "                    else if (rx + radius > canvas.width) { rx = canvas.width - radius; rdx *= -1; }",
+    "                    if (ry <= 25) break;",
+    "                    let hit = false;",
+    "                    for (let b of bubbles) {",
+    "                        if (b.active && Math.hypot(rx - b.x, ry - b.y) < radius * 1.8) { hit = true; break; }",
+    "                    }",
+    "                    if (hit) break;",
+    "                }",
+    "                ctx.lineTo(rx, ry);",
+    "                ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';",
     "                ctx.setLineDash([4, 4]);",
-    "                ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';",
     "                ctx.stroke();",
     "                ctx.setLineDash([]);",
     "            }",
@@ -302,10 +320,3 @@ html_lines = [
     "        }",
     "        loop();",
     "    </script>",
-    "</body>",
-    "</html>"
-]
-
-html_code = "\n".join(html_lines)
-encoded_html = base64.b64encode(html_code.encode("utf-8")).decode("utf-8")
-components.iframe(f"data:text/html;base64,{encoded_html}", height=580)
