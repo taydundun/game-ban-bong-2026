@@ -5,9 +5,9 @@ import base64
 st.set_page_config(page_title="Game Bắn Bóng", layout="centered")
 
 st.title("🎯 Game Bắn Bóng (Bubble Shooter)")
-st.write("Phiên bản hoàn chỉnh: Match-3 chuẩn xác, chống xếp chồng dọc, đường ngắm phản xạ tường có nếp gấp và cơ chế rơi bóng lơ lửng khi đứt kết nối!")
+st.write("Phiên bản hoàn chỉnh: Sửa triệt để lỗi cú pháp, chống xếp chồng dọc, rơi bóng lơ lửng và đường ngắm phản xạ tường có nếp gấp!")
 
-html_code = '''<!DOCTYPE html>
+html_code = """<!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
@@ -73,15 +73,12 @@ html_code = '''<!DOCTYPE html>
                     gameOver = true;
                 }
             });
-            let r = 0;
-            let colsInRow = cols;
-            let rowOffsetX = 0;
-            for (let c = 0; c < colsInRow; c++) {
+            for (let c = 0; c < cols; c++) {
                 bubbles.unshift({
-                    row: r,
+                    row: 0,
                     col: c,
-                    x: 25 + radius + c * diameter + rowOffsetX,
-                    y: 25 + r * rowHeight,
+                    x: 25 + radius + c * diameter,
+                    y: 25,
                     radius: radius,
                     color: getRandomColor(),
                     active: true
@@ -166,8 +163,7 @@ html_code = '''<!DOCTYPE html>
                 bubbles.push(newBubble);
                 if (newBubble.y >= 430) { gameOver = true; return; }
                 
-                let poppedCount = checkMatch(newBubble, bColor);
-                if (poppedCount > 0) {
+                if (checkMatch(newBubble, bColor) > 0) {
                     removeFloatingBubbles();
                 } else {
                     shotsSinceLastRow++;
@@ -181,8 +177,7 @@ html_code = '''<!DOCTYPE html>
 
         function snapToCeiling(bColor) {
             let approxCol = Math.round((bullet.x - 25 - radius) / diameter);
-            if (approxCol < 0) approxCol = 0;
-            if (approxCol >= cols) approxCol = cols - 1;
+            approxCol = Math.max(0, Math.min(cols - 1, approxCol));
 
             let targetX = 25 + radius + approxCol * diameter;
             let targetY = 25;
@@ -190,64 +185,4 @@ html_code = '''<!DOCTYPE html>
             let occupied = bubbles.some(b => b.active && b.row === 0 && b.col === approxCol);
             if (!occupied) {
                 let newBubble = { row: 0, col: approxCol, x: targetX, y: targetY, radius: radius, color: bColor, active: true };
-                bubbles.push(newBubble);
-                let poppedCount = checkMatch(newBubble, bColor);
-                if (poppedCount > 0) {
-                    removeFloatingBubbles();
-                } else {
-                    shotsSinceLastRow++;
-                    if (shotsSinceLastRow >= 5) {
-                        addNewRow();
-                        shotsSinceLastRow = 0;
-                    }
-                }
-            }
-        }
-
-        function checkMatch(startBubble, targetColor) {
-            let visited = new Set();
-            let queue = [startBubble];
-            let matched = [];
-            visited.add(startBubble);
-            while (queue.length > 0) {
-                let current = queue.shift();
-                if (current.color === targetColor && current.active) {
-                    matched.push(current);
-                    for (let b of bubbles) {
-                        if (b.active && !visited.has(b) && Math.hypot(current.x - b.x, current.y - b.y) < diameter * 1.15) {
-                            visited.add(b);
-                            queue.push(b);
-                        }
-                    }
-                }
-            }
-            if (matched.length >= 3) {
-                matched.forEach(b => {
-                    b.active = false;
-                    score += 20;
-                });
-                return matched.length;
-            }
-            return 0;
-        }
-
-        // CƠ CHẾ RƠI BÓNG LƠ LƯỞNG KHI BỊ ĐỨT KẾT NỐI VỚI TRẦN NHÀ
-        function removeFloatingBubbles() {
-            let visited = new Set();
-            let queue = [];
-
-            // Đưa tất cả các bóng đang bám vào trần (hàng 0) vào hàng đợi
-            for (let b of bubbles) {
-                if (b.active && (b.row === 0 || b.y <= 25 + radius)) {
-                    visited.add(b);
-                    queue.push(b);
-                }
-            }
-
-            // Lan truyền tìm kiếm liên thông BFS
-            while (queue.length > 0) {
-                let current = queue.shift();
-                for (let b of bubbles) {
-                    if (b.active && !visited.has(b)) {
-                        let dist = Math.hypot(current.x - b.x, current.y - b.y);
-                        if (dist
+                bubbles.push(
