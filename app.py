@@ -1,4 +1,4 @@
-import streamlit as stimport streamlit as st
+import streamlit as st
 import streamlit.components.v1 as components
 import base64
 
@@ -55,7 +55,7 @@ parts = [
     "let minD=Infinity,bestC=ac;for(let c=0;c<10;c++){if(!bubbles.some(b=>b.active&&b.row===0&&b.col===c)){",
     "let d=Math.abs((25+rad+c*dia)-bullet.x);if(d<minD){minD=d;bestC=c;}}}ac=bestC;tx=25+rad+ac*dia;}",
     "if(bubbles.some(b=>b.active&&b.row===0&&b.col===ac)){",
-    "for(let c=0;c<10;c++){if(!bubbles.some(b=>b.active&&b.row===0&&b.col===c)){ac=c;tx=25+rad+ac*dia;ak='ok';break;}}}",
+    "for(let c=0;c<10;c++){if(!bubbles.some(b=>b.active&&b.row===0&&b.col===c)){ac=c;tx=25+rad+ac*dia;break;}}}",
     "let nb={row:0,col:ac,x:tx,y:ty,r:rad,color:bCol,active:true};bubbles.push(nb);",
     "if(match(nb,bCol)>0)floatCheck();else{shots++;if(shots>=5){addRow();shots=0;}}}",
     "function match(startB,tCol){let vis=new Set(),q=[startB],matched=[];vis.add(startB);",
@@ -76,152 +76,4 @@ parts = [
     "for(let b of bubbles){if(b.active&&Math.hypot(bullet.x-b.x,bullet.y-b.y)<=dia){snap(b,bullet.color);bullet=null;break;}}}",
     "fallingBubbles.forEach(fb=>{fb.y+=fb.dy;fb.x+=fb.dx;fb.dy+=0.5;});fallingBubbles=fallingBubbles.filter(fb=>fb.y<cvs.height+50);}",
     "function draw(){ctx.clearRect(0,0,cvs.width,cvs.height);ctx.fillStyle='#FFF';ctx.font='bold 16px sans-serif';",
-    "ctx.fillText('Điểm: '+score,20,25);ctx.fillText('Chờ hàng: '+(5-shots),310,25);",
-    "bubbles.forEach(b=>{if(b.active){ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,Math.PI*2);ctx.fillStyle=b.color;ctx.fill();",
-    "ctx.lineWidth=2;ctx.strokeStyle='rgba(255,255,255,0.25)';ctx.stroke();ctx.closePath();}});",
-    "fallingBubbles.forEach(fb=>{ctx.beginPath();ctx.arc(fb.x,fb.y,fb.r,0,Math.PI*2);ctx.fillStyle=fb.color;ctx.fill();",
-    "ctx.lineWidth=2;ctx.strokeStyle='rgba(255,255,255,0.25)';ctx.stroke();ctx.closePath();});",
-    "if(!over){let a=Math.atan2(my-shooter.y,mx-shooter.x),rx=shooter.x,ry=shooter.y,rdx=Math.cos(a),rdy=Math.sin(a);",
-    "ctx.beginPath();ctx.moveTo(rx,ry);for(let i=0;i<400;i++){rx+=rdx*3;ry+=rdy*3;",
-    "if(rx-rad<0){rx=rad;rdx*=-1;ctx.lineTo(rx,ry);}else if(rx+rad>cvs.width){rx=cvs.width-rad;rdx*=-1;ctx.lineTo(rx,ry);}",
-    "if(ry<=25){ctx.lineTo(rx,ry);break;}",
-    "if(bubbles.some(b=>b.active&&Math.hypot(rx-b.x,ry-b.y)<rad*1.8)){ctx.lineTo(rx,ry);break;}}",
-    "ctx.lineTo(rx,ry);ctx.strokeStyle='rgba(255,255,255,0.6)';ctx.setLineDash([4,4]);ctx.stroke();ctx.setLineDash([]);}",
-    "if(bullet){ctx.beginPath();ctx.arc(bullet.x,bullet.y,rad,0,Math.PI*2);ctx.fillStyle=bullet.color;ctx.fill();ctx.closePath();}",
-    "ctx.beginPath();ctx.arc(shooter.x,shooter.y,shooter.r,0,Math.PI*2);ctx.fillStyle=shooter.color;ctx.fill();",
-    "ctx.lineWidth=3;ctx.strokeStyle='#FFF';ctx.stroke();ctx.closePath();",
-    "if(over){ctx.fillStyle='rgba(0,0,0,0.85)';ctx.fillRect(0,0,cvs.width,cvs.height);",
-    "ctx.fillStyle='#FF5964';ctx.font='bold 32px sans-serif';ctx.textAlign='center';ctx.fillText('GAME OVER',cvs.width/2,cvs.height/2-20);",
-    "ctx.fillStyle='#FFF';ctx.font='18px sans-serif';ctx.fillText('Tổng điểm: '+score,cvs.width/2,cvs.height/2+20);",
-    "ctx.fillText('Click chuột để chơi lại',cvs.width/2,cvs.height/2+60);ctx.textAlign='left';}}",
-    "function loop(){update();draw();requestAnimationFrame(loop);}loop();</script></body></html>"
-]
-
-html_code = "".join(parts)
-encoded_html = base64.b64encode(html_code.encode("utf-8")).decode("utf-8")
-components.iframe(f"data:text/html;base64,{encoded_html}", height=580)
-            bubbles.push(nb);
-            if (match(nb, bCol) > 0) { floatCheck(); }
-            else { shots++; if (shots >= 5) { addRow(); shots = 0; } }
-        }
-
-        function match(startB, tCol) {
-            let vis = new Set(), q = [startB], matched = [];
-            vis.add(startB);
-            while (q.length > 0) {
-                let cur = q.shift();
-                if (cur.color === tCol && cur.active) {
-                    matched.push(cur);
-                    let nList = getNeighbors(cur.row, cur.col);
-                    for (let n of nList) {
-                        let nb = bubbles.find(b => b.active && !vis.has(b) && b.row === n.r && b.col === n.c);
-                        if (nb) { vis.add(nb); q.push(nb); }
-                    }
-                }
-            }
-            if (matched.length >= 3) {
-                matched.forEach(b => { b.active = false; score += 20; });
-                return matched.length;
-            }
-            return 0;
-        }
-
-        function floatCheck() {
-            let vis = new Set(), q = [];
-            bubbles.forEach(b => { if (b.active && b.row === 0) { vis.add(b); q.push(b); } });
-            while (q.length > 0) {
-                let cur = q.shift();
-                let nList = getNeighbors(cur.row, cur.col);
-                for (let n of nList) {
-                    let nb = bubbles.find(b => b.active && !vis.has(b) && b.row === n.r && b.col === n.c);
-                    if (nb) { vis.add(nb); q.push(nb); }
-                }
-            }
-            bubbles.forEach(b => {
-                if (b.active && !vis.has(b)) {
-                    b.active = false;
-                    score += 30;
-                    fallingBubbles.push({ x: b.x, y: b.y, r: rad, color: b.color, dx: (Math.random() - 0.5) * 4, dy: 2 + Math.random() * 2 });
-                }
-            });
-        }
-
-        function update() {
-            if (over) return;
-            if (bullet) {
-                bullet.x += bullet.dx;
-                bullet.y += bullet.dy;
-                if (bullet.x - rad < 0 || bullet.x + rad > cvs.width) bullet.dx *= -1;
-                if (bullet.y - rad <= 15) {
-                    snapCeiling(bullet.color);
-                    bullet = null;
-                    return;
-                }
-                for (let b of bubbles) {
-                    if (b.active && Math.hypot(bullet.x - b.x, bullet.y - b.y) <= dia) {
-                        snap(b, bullet.color);
-                        bullet = null;
-                        break;
-                    }
-                }
-            }
-            fallingBubbles.forEach(fb => {
-                fb.y += fb.dy;
-                fb.x += fb.dx;
-                fb.dy += 0.5;
-            });
-            fallingBubbles = fallingBubbles.filter(fb => fb.y < cvs.height + 50);
-        }
-
-        function draw() {
-            ctx.clearRect(0, 0, cvs.width, cvs.height);
-            ctx.fillStyle = "#FFF";
-            ctx.font = "bold 16px sans-serif";
-            ctx.fillText("Điểm: " + score, 20, 25);
-            ctx.fillText("Chờ hàng: " + (5 - shots), 310, 25);
-
-            bubbles.forEach(b => {
-                if (b.active) {
-                    ctx.beginPath();
-                    ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
-                    ctx.fillStyle = b.color;
-                    ctx.fill();
-                    ctx.lineWidth = 2;
-                    ctx.strokeStyle = "rgba(255,255,255,0.25)";
-                    ctx.stroke();
-                    ctx.closePath();
-                }
-            });
-
-            fallingBubbles.forEach(fb => {
-                ctx.beginPath();
-                ctx.arc(fb.x, fb.y, fb.r, 0, Math.PI * 2);
-                ctx.fillStyle = fb.color;
-                ctx.fill();
-                ctx.lineWidth = 2;
-                ctx.strokeStyle = "rgba(255,255,255,0.25)";
-                ctx.stroke();
-                ctx.closePath();
-            });
-
-            if (!over) {
-                let a = Math.atan2(my - shooter.y, mx - shooter.x);
-                let rx = shooter.x, ry = shooter.y, rdx = Math.cos(a), rdy = Math.sin(a);
-                ctx.beginPath();
-                ctx.moveTo(rx, ry);
-                for (let i = 0; i < 400; i++) {
-                    rx += rdx * 3; ry += rdy * 3;
-                    if (rx - rad < 0) { rx = rad; rdx *= -1; ctx.lineTo(rx, ry); }
-                    else if (rx + rad > cvs.width) { rx = cvs.width - rad; rdx *= -1; ctx.lineTo(rx, ry); }
-                    if (ry <= 25) { ctx.lineTo(rx, ry); break; }
-                    let hit = bubbles.some(b => b.active && Math.hypot(rx - b.x, ry - b.y) < rad * 1.8);
-                    if (hit) { ctx.lineTo(rx, ry); break; }
-                }
-                ctx.lineTo(rx, ry);
-                ctx.strokeStyle = "rgba(255, 255, 255, 0.6)";
-                ctx.setLineDash([4, 4]);
-                ctx.stroke();
-                ctx.setLineDash([]);
-            }
-
-            if
+    "ctx.fillText('Điểm: '+score,20,25);ctx.fillText('Chờ hàng: '+(5-shots),310,
