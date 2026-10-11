@@ -5,7 +5,7 @@ import base64
 st.set_page_config(page_title="Game Bắn Bóng", layout="centered")
 
 st.title("🎯 Game Bắn Bóng (Bubble Shooter)")
-st.write("Phiên bản hoàn chỉnh: Bám lưới chuẩn xác vào ô gần nhất, có đường ngắm dội tường và chống xếp chồng!")
+st.write("Phiên bản kiểm tra lỗi: Chống xếp chồng dọc tuyệt đối, bóng tự lấp khe trống và đường ngắm phản xạ tường có nếp gấp!")
 
 html_code = """
 <!DOCTYPE html>
@@ -108,12 +108,11 @@ html_code = """
             }
         });
 
-        // THUẬT TOÁN BÁM LƯỚI CHUẨN XÁC: TÌM Ô TRỐNG GẦN NHẤT ĐƯỢC KẾT NỐI VỚI CỤM HOẶC TRẦN
-        function snapBullet(bColor) {
+        function snapBullet() {
             let bestSlot = null;
             let minDist = Infinity;
 
-            for (let r = 0; r < 14; r++) {
+            for (let r = 0; r < 15; r++) {
                 let colsInRow = (r % 2 === 1) ? cols - 1 : cols;
                 let rowOffsetX = (r % 2 === 1) ? radius : 0;
                 for (let c = 0; c < colsInRow; c++) {
@@ -135,7 +134,7 @@ html_code = """
                             }
                         }
 
-                        if (isConnected) {
+                        if (isConnected && targetY <= bullet.y + radius * 0.3) {
                             let distToBullet = Math.hypot(bullet.x - targetX, bullet.y - targetY);
                             if (distToBullet < minDist) {
                                 minDist = distToBullet;
@@ -146,11 +145,42 @@ html_code = """
                 }
             }
 
+            if (!bestSlot) {
+                minDist = Infinity;
+                for (let r = 0; r < 15; r++) {
+                    let colsInRow = (r % 2 === 1) ? cols - 1 : cols;
+                    let rowOffsetX = (r % 2 === 1) ? radius : 0;
+                    for (let c = 0; c < colsInRow; c++) {
+                        let occupied = bubbles.some(b => b.active && b.row === r && b.col === c);
+                        if (!occupied) {
+                            let targetX = 25 + radius + c * diameter + rowOffsetX;
+                            let targetY = 25 + r * rowHeight;
+                            let isConnected = (r === 0);
+                            if (!isConnected) {
+                                for (let b of bubbles) {
+                                    if (b.active && Math.hypot(targetX - b.x, targetY - b.y) < diameter * 1.15) {
+                                        isConnected = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (isConnected && targetY <= bullet.y + radius * 0.5) {
+                                let dist = Math.hypot(bullet.x - targetX, bullet.y - targetY);
+                                if (dist < minDist) {
+                                    minDist = dist;
+                                    bestSlot = { row: r, col: c, x: targetX, y: targetY };
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             if (bestSlot) {
-                let newBubble = { row: bestSlot.row, col: bestSlot.col, x: bestSlot.x, y: bestSlot.y, radius: radius, color: bColor, active: true };
+                let newBubble = { row: bestSlot.row, col: bestSlot.col, x: bestSlot.x, y: bestSlot.y, radius: radius, color: bullet.color, active: true };
                 bubbles.push(newBubble);
                 if (newBubble.y >= 430) { gameOver = true; return; }
-                let popped = checkMatch(newBubble, bColor);
+                let popped = checkMatch(newBubble, bullet.color);
                 if (popped > 0) { removeFloatingBubbles(); }
                 else {
                     shotsSinceLastRow++;
@@ -207,11 +237,11 @@ html_code = """
                 bullet.x += bullet.dx;
                 bullet.y += bullet.dy;
                 if (bullet.x - radius < 0 || bullet.x + radius > canvas.width) { bullet.dx *= -1; }
-                if (bullet.y - radius <= 15) { snapBullet(bullet.color); bullet = null; return; }
+                if (bullet.y - radius <= 15) { snapBullet(); bullet = null; return; }
                 for (let b of bubbles) {
                     if (b.active) {
                         let dist = Math.hypot(bullet.x - b.x, bullet.y - b.y);
-                        if (dist < diameter * 0.95) { snapBullet(bullet.color); bullet = null; break; }
+                        if (dist < diameter * 0.95) { snapBullet(); bullet = null; break; }
                     }
                 }
             }
@@ -237,7 +267,6 @@ html_code = """
                 }
             });
 
-            // ĐƯỜNG NGẮM PHẢN XẠ TƯỜNG (WALL BOUNCE AIM LINE)
             if (!gameOver) {
                 let angle = Math.atan2(mouseY - shooter.y, mouseX - shooter.x);
                 let rx = shooter.x;
@@ -248,20 +277,39 @@ html_code = """
                 ctx.beginPath();
                 ctx.moveTo(rx, ry);
 
-                for (let step = 0; step < 300; step++) {
-                    rx += rdx * 2;
-                    ry += rdy * 2;
-                    if (rx - radius < 0) { rx = radius; rdx *= -1; }
-                    else if (rx + radius > canvas.width) { rx = canvas.width - radius; rdx *= -1; }
-                    if (ry <= 25) break;
+                for (let step = 0; step < 400; step++) {
+                    rx += rdx * 3;
+                    ry += rdy * 3;
+
+                    if (rx - radius < 0) {
+                        rx = radius;
+                        rdx *= -1;
+                        ctx.lineTo(rx, ry);
+                    } else if (rx + radius > canvas.width) {
+                        rx = canvas.width - radius;
+                        rdx *= -1;
+                        ctx.lineTo(rx, ry);
+                    }
+
+                    if (ry <= 25) {
+                        ctx.lineTo(rx, ry);
+                        break;
+                    }
+
                     let hit = false;
                     for (let b of bubbles) {
-                        if (b.active && Math.hypot(rx - b.x, ry - b.y) < radius * 1.8) { hit = true; break; }
+                        if (b.active && Math.hypot(rx - b.x, ry - b.y) < radius * 1.8) {
+                            hit = true;
+                            break;
+                        }
                     }
-                    if (hit) break;
+                    if (hit) {
+                        ctx.lineTo(rx, ry);
+                        break;
+                    }
                 }
                 ctx.lineTo(rx, ry);
-                ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
+                ctx.strokeStyle = "rgba(255, 255, 255, 0.6)";
                 ctx.setLineDash([4, 4]);
                 ctx.stroke();
                 ctx.setLineDash([]);
@@ -308,7 +356,3 @@ html_code = """
     </script>
 </body>
 </html>
-"""
-
-encoded_html = base64.b64encode(html_code.encode("utf-8")).decode("utf-8")
-components.iframe(f"data:text/html;base64,{encoded_html}", height=580)
