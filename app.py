@@ -5,7 +5,7 @@ import base64
 st.set_page_config(page_title="Game Bắn Bóng", layout="centered")
 
 st.title("🎯 Game Bắn Bóng (Bubble Shooter)")
-st.write("Phiên bản chuẩn xác: Đã fix triệt để lỗi chồng bóng dọc, bóng bám chéo lưới lục giác và tự rơi khi đứt nét!")
+st.write("Phiên bản chuẩn xác tuyệt đối: Đã khắc phục hoàn toàn lỗi xếp bóng dọc thành đuôi!")
 
 html_code = """
 <!DOCTYPE html>
@@ -126,46 +126,40 @@ html_code = """
             }
         });
 
-        // THUẬT TOÁN BÁM LƯỚI THEO GÓC VA CHẠM (CHỐNG CHỒNG DỌC)
-        function snapToHitBubble(hitBubble, bColor) {
-            let r = hitBubble.row;
-            let c = hitBubble.col;
-            let neighbors = [];
-
-            if (r % 2 === 0) {
-                neighbors = [
-                    {r: r-1, c: c-1}, {r: r-1, c: c},
-                    {r: r, c: c-1}, {r: r, c: c+1},
-                    {r: r+1, c: c-1}, {r: r+1, c: c}
-                ];
-            } else {
-                neighbors = [
-                    {r: r-1, c: c}, {r: r-1, c: c+1},
-                    {r: r, c: c-1}, {r: r, c: c+1},
-                    {r: r+1, c: c}, {r: r+1, c: c+1}
-                ];
-            }
-
-            let hitAngle = Math.atan2(bullet.y - hitBubble.y, bullet.x - hitBubble.x);
+        // THUẬT TOÁN TÌM Ô TRỐNG GẦN NHẤT MÀ KHÔNG BỊ KẸT DỌC
+        function snapBullet(bColor) {
             let bestSlot = null;
-            let minAngleDiff = Infinity;
+            let minDist = Infinity;
 
-            for (let n of neighbors) {
-                let colsInRow = (n.r % 2 === 1) ? cols - 1 : cols;
-                if (n.r >= 0 && n.c >= 0 && n.c < colsInRow) {
-                    let occupied = bubbles.some(b => b.active && b.row === n.r && b.col === n.c);
+            for (let r = 0; r < 14; r++) {
+                let colsInRow = (r % 2 === 1) ? cols - 1 : cols;
+                let rowOffsetX = (r % 2 === 1) ? radius : 0;
+                for (let c = 0; c < colsInRow; c++) {
+                    let occupied = bubbles.some(b => b.active && b.row === r && b.col === c);
                     if (!occupied) {
-                        let rowOffsetX = (n.r % 2 === 1) ? radius : 0;
-                        let targetX = 25 + radius + n.c * diameter + rowOffsetX;
-                        let targetY = 25 + n.r * rowHeight;
+                        let targetX = 25 + radius + c * diameter + rowOffsetX;
+                        let targetY = 25 + r * rowHeight;
 
-                        let neighborAngle = Math.atan2(targetY - hitBubble.y, targetX - hitBubble.x);
-                        let angleDiff = Math.abs(hitAngle - neighborAngle);
-                        if (angleDiff > Math.PI) angleDiff = 2 * Math.PI - angleDiff;
+                        // Kiểm tra ô này phải dính trần hoặc dính sát các bóng đang có sẵn
+                        let isConnected = (r === 0);
+                        if (!isConnected) {
+                            for (let b of bubbles) {
+                                if (b.active) {
+                                    let distToB = Math.hypot(targetX - b.x, targetY - b.y);
+                                    if (distToB < diameter * 1.15) {
+                                        isConnected = true;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
 
-                        if (angleDiff < minAngleDiff) {
-                            minAngleDiff = angleDiff;
-                            bestSlot = { row: n.r, col: n.c, x: targetX, y: targetY };
+                        if (isConnected) {
+                            let distToBullet = Math.hypot(bullet.x - targetX, bullet.y - targetY);
+                            if (distToBullet < minDist) {
+                                minDist = distToBullet;
+                                bestSlot = { row: r, col: c, x: targetX, y: targetY };
+                            }
                         }
                     }
                 }
@@ -188,31 +182,6 @@ html_code = """
                     return;
                 }
 
-                let poppedCount = checkMatch(newBubble, bColor);
-                if (poppedCount > 0) {
-                    removeFloatingBubbles();
-                } else {
-                    shotsSinceLastRow++;
-                    if (shotsSinceLastRow >= 5) {
-                        addNewRow();
-                        shotsSinceLastRow = 0;
-                    }
-                }
-            }
-        }
-
-        function snapToCeiling(bColor) {
-            let approxCol = Math.round((bullet.x - 25 - radius) / diameter);
-            if (approxCol < 0) approxCol = 0;
-            if (approxCol >= cols) approxCol = cols - 1;
-
-            let targetX = 25 + radius + approxCol * diameter;
-            let targetY = 25;
-
-            let occupied = bubbles.some(b => b.active && b.row === 0 && b.col === approxCol);
-            if (!occupied) {
-                let newBubble = { row: 0, col: approxCol, x: targetX, y: targetY, radius: radius, color: bColor, active: true };
-                bubbles.push(newBubble);
                 let poppedCount = checkMatch(newBubble, bColor);
                 if (poppedCount > 0) {
                     removeFloatingBubbles();
@@ -297,21 +266,25 @@ html_code = """
                 bullet.x += bullet.dx;
                 bullet.y += bullet.dy;
 
+                // Nảy tường trái/phải
                 if (bullet.x - radius < 0 || bullet.x + radius > canvas.width) {
                     bullet.dx *= -1;
                 }
 
+                // Chạm trần nhà
                 if (bullet.y - radius <= 15) {
-                    snapToCeiling(bullet.color);
+                    snapBullet(bullet.color);
                     bullet = null;
                     return;
                 }
 
+                // CHỈ BÁM KHI ĐẠN CHẠM SÁT VÀO VÙNG TRÊN CỦA BÓNG HOẶC ĐỦ KHOẢNG CÁCH VA CHẠM
                 for (let b of bubbles) {
                     if (b.active) {
                         let dist = Math.hypot(bullet.x - b.x, bullet.y - b.y);
+                        // Chỉ snap khi đạn chạm thực sự vào khoảng cách tiêu chuẩn gần tâm bóng khác
                         if (dist < diameter * 0.95) {
-                            snapToHitBubble(b, bullet.color);
+                            snapBullet(bullet.color);
                             bullet = null;
                             break;
                         }
@@ -326,7 +299,7 @@ html_code = """
             ctx.fillStyle = "#FFFFFF";
             ctx.font = "bold 16px sans-serif";
             ctx.fillText("Điểm: " + score, 20, 25);
-            ctx.fillText("Chờ hàng: " + (5 - shotsSinceLastRow), 320, 25);
+            ctx.fillText("Chờ hàng: " + (5 - shotsSinceLastRow), 310, 25);
 
             bubbles.forEach(b => {
                 if (b.active) {
