@@ -5,7 +5,7 @@ import base64
 st.set_page_config(page_title="Game Bắn Bóng", layout="centered")
 
 st.title("🎯 Game Bắn Bóng (Bubble Shooter)")
-st.write("Phiên bản hoàn chỉnh: Chống xếp chồng đuôi dọc, bóng tự lấp khe trống và đường ngắm phản xạ tường có nếp gấp chuẩn xác!")
+st.write("Phiên bản chuẩn xác tối ưu: Đã sửa lỗi đi xuyên, khớp đúng màu để nổ bóng và chống xếp chồng dọc tuyệt đối!")
 
 html_code = '''<!DOCTYPE html>
 <html>
@@ -107,77 +107,90 @@ html_code = '''<!DOCTYPE html>
             }
         });
 
-        function snapBullet() {
+        // HÀM BÁM LƯỚI CHUẨN XÁC: CHỈ TÌM Ô TRỐNG PHÍA TRÊN HOẶC NGANG, TUYỆT ĐỐI KHÔNG XẾP DƯỚI
+        function snapToHitBubble(hitBubble, bColor) {
+            let r = hitBubble.row;
+            let c = hitBubble.col;
+            let neighbors = (r % 2 === 0) ? [
+                {r: r-1, c: c-1}, {r: r-1, c: c}, 
+                {r: r, c: c-1}, {r: r, c: c+1}, 
+                {r: r+1, c: c-1}, {r: r+1, c: c}
+            ] : [
+                {r: r-1, c: c}, {r: r-1, c: c+1}, 
+                {r: r, c: c-1}, {r: r, c: c+1}, 
+                {r: r+1, c: c}, {r: r+1, c: c+1}
+            ];
+
             let bestSlot = null;
             let minDist = Infinity;
 
-            for (let r = 0; r < 15; r++) {
-                let colsInRow = (r % 2 === 1) ? cols - 1 : cols;
-                let rowOffsetX = (r % 2 === 1) ? radius : 0;
-                for (let c = 0; c < colsInRow; c++) {
-                    let occupied = bubbles.some(b => b.active && b.row === r && b.col === c);
+            for (let n of neighbors) {
+                let colsInRow = (n.r % 2 === 1) ? cols - 1 : cols;
+                if (n.r >= 0 && n.c >= 0 && n.c < colsInRow) {
+                    let occupied = bubbles.some(b => b.active && b.row === n.r && b.col === n.c);
                     if (!occupied) {
-                        let targetX = 25 + radius + c * diameter + rowOffsetX;
-                        let targetY = 25 + r * rowHeight;
+                        let rowOffsetX = (n.r % 2 === 1) ? radius : 0;
+                        let targetX = 25 + radius + n.c * diameter + rowOffsetX;
+                        let targetY = 25 + n.r * rowHeight;
 
-                        let isConnected = (r === 0);
-                        if (!isConnected) {
-                            for (let b of bubbles) {
-                                if (b.active && Math.hypot(targetX - b.x, targetY - b.y) < diameter * 1.15) {
-                                    isConnected = true;
-                                    break;
-                                }
-                            }
-                        }
+                        // CHẶN ĐỨNG HOÀN TOÀN CÁC Ô PHÍA DƯỚI (CHỈ CHO PHÉP TRÊN VÀ NGANG)
+                        if (n.r > hitBubble.row) continue;
 
-                        if (isConnected && targetY <= bullet.y + radius * 0.3) {
-                            let dist = Math.hypot(bullet.x - targetX, bullet.y - targetY);
-                            if (dist < minDist) {
-                                minDist = dist;
-                                bestSlot = { row: r, col: c, x: targetX, y: targetY };
-                            }
+                        let dist = Math.hypot(bullet.x - targetX, bullet.y - targetY);
+                        if (dist < minDist) {
+                            minDist = dist;
+                            bestSlot = { row: n.r, col: n.c, x: targetX, y: targetY };
                         }
                     }
                 }
             }
 
+            // Fallback an toàn nếu không tìm được ô bên cạnh
             if (!bestSlot) {
-                minDist = Infinity;
-                for (let r = 0; r < 15; r++) {
-                    let colsInRow = (r % 2 === 1) ? cols - 1 : cols;
-                    let rowOffsetX = (r % 2 === 1) ? radius : 0;
-                    for (let c = 0; c < colsInRow; c++) {
-                        let occupied = bubbles.some(b => b.active && b.row === r && b.col === c);
-                        if (!occupied) {
-                            let targetX = 25 + radius + c * diameter + rowOffsetX;
-                            let targetY = 25 + r * rowHeight;
-                            let isConnected = (r === 0);
-                            if (!isConnected) {
-                                for (let b of bubbles) {
-                                    if (b.active && Math.hypot(targetX - b.x, targetY - b.y) < diameter * 1.15) {
-                                        isConnected = true;
-                                        break;
-                                    }
-                                }
-                            }
-                            if (isConnected && targetY <= bullet.y + radius * 0.5) {
-                                let dist = Math.hypot(bullet.x - targetX, bullet.y - targetY);
-                                if (dist < minDist) {
-                                    minDist = dist;
-                                    bestSlot = { row: r, col: c, x: targetX, y: targetY };
-                                }
-                            }
-                        }
-                    }
-                }
+                let fallbackR = Math.max(0, r - 1);
+                let colsInRow = (fallbackR % 2 === 1) ? cols - 1 : cols;
+                let fallbackC = Math.min(c, colsInRow - 1);
+                let rowOffsetX = (fallbackR % 2 === 1) ? radius : 0;
+                bestSlot = {
+                    row: fallbackR,
+                    col: fallbackC,
+                    x: 25 + radius + fallbackC * diameter + rowOffsetX,
+                    y: 25 + fallbackR * rowHeight
+                };
             }
 
             if (bestSlot) {
-                let newBubble = { row: bestSlot.row, col: bestSlot.col, x: bestSlot.x, y: bestSlot.y, radius: radius, color: bullet.color, active: true };
+                let newBubble = { row: bestSlot.row, col: bestSlot.col, x: bestSlot.x, y: bestSlot.y, radius: radius, color: bColor, active: true };
                 bubbles.push(newBubble);
                 if (newBubble.y >= 430) { gameOver = true; return; }
-                let popped = checkMatch(newBubble, bullet.color);
-                if (popped > 0) {
+                
+                let poppedCount = checkMatch(newBubble, bColor);
+                if (poppedCount > 0) {
+                    removeFloatingBubbles();
+                } else {
+                    shotsSinceLastRow++;
+                    if (shotsSinceLastRow >= 5) {
+                        addNewRow();
+                        shotsSinceLastRow = 0;
+                    }
+                }
+            }
+        }
+
+        function snapToCeiling(bColor) {
+            let approxCol = Math.round((bullet.x - 25 - radius) / diameter);
+            if (approxCol < 0) approxCol = 0;
+            if (approxCol >= cols) approxCol = cols - 1;
+
+            let targetX = 25 + radius + approxCol * diameter;
+            let targetY = 25;
+
+            let occupied = bubbles.some(b => b.active && b.row === 0 && b.col === approxCol);
+            if (!occupied) {
+                let newBubble = { row: 0, col: approxCol, x: targetX, y: targetY, radius: radius, color: bColor, active: true };
+                bubbles.push(newBubble);
+                let poppedCount = checkMatch(newBubble, bColor);
+                if (poppedCount > 0) {
                     removeFloatingBubbles();
                 } else {
                     shotsSinceLastRow++;
@@ -253,14 +266,15 @@ html_code = '''<!DOCTYPE html>
                 }
 
                 if (bullet.y - radius <= 15) {
-                    snapBullet();
+                    snapToCeiling(bullet.color);
                     bullet = null;
                     return;
                 }
 
+                // SỬA LỖI QUAN TRỌNG: GỌI ĐÚNG HÀM snapToHitBubble VỚI QUẢ BÓNG BỊ TRÚNG
                 for (let b of bubbles) {
                     if (b.active && Math.hypot(bullet.x - b.x, bullet.y - b.y) < diameter * 0.95) {
-                        snapBullet();
+                        snapToHitBubble(b, bullet.color);
                         bullet = null;
                         break;
                     }
