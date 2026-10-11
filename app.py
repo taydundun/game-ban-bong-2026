@@ -4,7 +4,7 @@ import streamlit.components.v1 as components
 st.set_page_config(page_title="Game Bắn Bóng", layout="centered")
 
 st.title("🎯 Game Bắn Bóng (Bubble Shooter)")
-st.write("Ngắm bằng chuột, Click bắn bóng cùng màu để ăn điểm và tạo hàng bóng mới!")
+st.write("Bắn trúng bóng cùng màu để làm nổ cả cụm bóng liên kết!")
 
 game_code = """
 <!DOCTYPE html>
@@ -40,18 +40,20 @@ game_code = """
         let mouseX = 220, mouseY = 0;
 
         let bubbles = [];
-        const rows = 4;
+        const rows = 5;
         const cols = 9;
         const radius = 18;
         const rowHeight = 36;
+        const colWidth = 44;
 
-        // Khởi tạo lưới bóng ban đầu
         function initBubbles() {
             bubbles = [];
             for (let r = 0; r < rows; r++) {
                 for (let c = 0; c < cols; c++) {
                     bubbles.push({
-                        x: 35 + c * 45,
+                        row: r,
+                        col: c,
+                        x: 35 + c * colWidth,
                         y: 40 + r * rowHeight,
                         radius: radius,
                         color: getRandomColor(),
@@ -62,17 +64,17 @@ game_code = """
         }
         initBubbles();
 
-        // Thêm 1 hàng bóng mới lên trên cùng và đẩy các hàng cũ xuống
         function addNewRow() {
-            // Đẩy tất cả bóng cũ xuống dưới 1 hàng
             bubbles.forEach(b => {
                 b.y += rowHeight;
+                b.row += 1;
             });
 
-            // Tạo hàng mới ở trên cùng
             for (let c = 0; c < cols; c++) {
                 bubbles.push({
-                    x: 35 + c * 45,
+                    row: 0,
+                    col: c,
+                    x: 35 + c * colWidth,
                     y: 40,
                     radius: radius,
                     color: getRandomColor(),
@@ -104,35 +106,62 @@ game_code = """
             }
         });
 
+        // Thuật toán lan truyền tìm các quả bóng cùng màu liền kề (Flood Fill)
+        function popCluster(startBubble, targetColor) {
+            let visited = new Set();
+            let queue = [startBubble];
+            let matched = [];
+
+            visited.add(startBubble);
+
+            while (queue.length > 0) {
+                let current = queue.shift();
+                if (current.color === targetColor && current.active) {
+                    matched.push(current);
+
+                    // Tìm các bóng xung quanh gần nó
+                    for (let b of bubbles) {
+                        if (b.active && !visited.has(b)) {
+                            let dist = Math.hypot(current.x - b.x, current.y - b.y);
+                            if (dist < colWidth * 1.3) { // Khoảng cách hàng xóm
+                                visited.add(b);
+                                queue.push(b);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Nếu cụm từ 2 quả trở lên thì cho nổ hết
+            if (matched.length >= 1) {
+                matched.forEach(b => {
+                    b.active = false;
+                    score += 10;
+                });
+                addNewRow(); // Thêm hàng mới khi ăn được bóng
+            }
+        }
+
         function update() {
             if (bullet) {
                 bullet.x += bullet.dx;
                 bullet.y += bullet.dy;
 
-                // Bật tường trái/phải
                 if (bullet.x - radius < 0 || bullet.x + radius > canvas.width) {
                     bullet.dx *= -1;
                 }
 
-                // Chạm trần
                 if (bullet.y - radius < 0) {
                     bullet = null;
                     return;
                 }
 
-                // Kiểm tra va chạm với bóng
                 for (let b of bubbles) {
                     if (b.active) {
                         let dist = Math.hypot(bullet.x - b.x, bullet.y - b.y);
                         if (dist < radius * 2) {
-                            // CƠ CHẾ: Cùng màu mới ăn được điểm!
-                            if (bullet.color === b.color) {
-                                b.active = false;
-                                score += 10;
-                                // Ăn thành công -> Thêm 1 hàng bóng mới chồng lên trên
-                                addNewRow();
-                            }
-                            bullet = null; // Hủy đạn sau khi va chạm
+                            popCluster(b, bullet.color);
+                            bullet = null;
                             break;
                         }
                     }
@@ -143,12 +172,10 @@ game_code = """
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Hiển thị điểm số
             ctx.fillStyle = "#FFFFFF";
             ctx.font = "bold 18px sans-serif";
             ctx.fillText("Điểm: " + score, 40, 25);
 
-            // Vẽ các quả bóng
             bubbles.forEach(b => {
                 if (b.active) {
                     ctx.beginPath();
@@ -162,7 +189,6 @@ game_code = """
                 }
             });
 
-            // Đường ngắm
             ctx.beginPath();
             ctx.moveTo(shooter.x, shooter.y);
             ctx.lineTo(mouseX, mouseY);
@@ -171,7 +197,6 @@ game_code = """
             ctx.stroke();
             ctx.setLineDash([]);
 
-            // Đạn đang bay
             if (bullet) {
                 ctx.beginPath();
                 ctx.arc(bullet.x, bullet.y, radius, 0, Math.PI * 2);
@@ -180,7 +205,6 @@ game_code = """
                 ctx.closePath();
             }
 
-            // Viên đạn chuẩn bị bắn ở súng
             ctx.beginPath();
             ctx.arc(shooter.x, shooter.y, shooter.radius, 0, Math.PI * 2);
             ctx.fillStyle = shooter.color;
