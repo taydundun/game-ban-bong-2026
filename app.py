@@ -4,7 +4,7 @@ import streamlit.components.v1 as components
 st.set_page_config(page_title="Game Bắn Bóng", layout="centered")
 
 st.title("🎯 Game Bắn Bóng (Bubble Shooter)")
-st.write("Bắn bóng dính vào lưới, khớp màu để nổ và chồng hàng mới!")
+st.write("Game Bubble Shooter chuẩn chỉnh: Lưới bóng so le, ngắm bắn dính lưới, nổ cụm màu và tiến hàng mới!")
 
 game_code = """
 <!DOCTYPE html>
@@ -29,33 +29,35 @@ game_code = """
         const ctx = canvas.getContext("2d");
 
         let score = 0;
+        let shotsSinceLastRow = 0;
         const colors = ["#FF5964", "#35A7FF", "#38B000", "#FFE600", "#9B5DE5"];
         
         function getRandomColor() {
             return colors[Math.floor(Math.random() * colors.length)];
         }
 
-        let shooter = { x: 220, y: 510, radius: 16, color: getRandomColor() };
+        let shooter = { x: 220, y: 510, radius: 18, color: getRandomColor() };
         let bullet = null;
         let mouseX = 220, mouseY = 0;
 
         let bubbles = [];
         const rows = 4;
-        const cols = 9;
+        const cols = 10;
         const radius = 18;
-        const rowHeight = 32;
-        const colWidth = 44;
+        const diameter = radius * 2;
+        const rowHeight = radius * Math.sqrt(3); // Khoảng cách chuẩn lưới lục giác
 
         function initBubbles() {
             bubbles = [];
             for (let r = 0; r < rows; r++) {
-                for (let c = 0; c < cols; c++) {
-                    let xOffset = (r % 2 === 1) ? colWidth / 2 : 0;
+                let colsInRow = (r % 2 === 1) ? cols - 1 : cols;
+                let rowOffsetX = (r % 2 === 1) ? radius : 0;
+                for (let c = 0; c < colsInRow; c++) {
                     bubbles.push({
                         row: r,
                         col: c,
-                        x: 35 + c * colWidth + xOffset,
-                        y: 35 + r * rowHeight,
+                        x: 25 + radius + c * diameter + rowOffsetX,
+                        y: 25 + r * rowHeight,
                         radius: radius,
                         color: getRandomColor(),
                         active: true
@@ -73,12 +75,15 @@ game_code = """
             });
 
             // Thêm hàng mới ở trên cùng
-            for (let c = 0; c < cols; c++) {
-                bubbles.push({
-                    row: 0,
+            let r = 0;
+            let colsInRow = (r % 2 === 1) ? cols - 1 : cols;
+            let rowOffsetX = (r % 2 === 1) ? radius : 0;
+            for (let c = 0; c < colsInRow; c++) {
+                bubbles.unshift({
+                    row: r,
                     col: c,
-                    x: 35 + c * colWidth,
-                    y: 35,
+                    x: 25 + radius + c * diameter + rowOffsetX,
+                    y: 25 + r * rowHeight,
                     radius: radius,
                     color: getRandomColor(),
                     active: true
@@ -110,20 +115,22 @@ game_code = """
         });
 
         function snapBulletToGrid(bColor) {
-            // Tìm vị trí lưới gần nhất để đạn dính vào và trở thành một quả bóng mới
-            let minDst = Infinity;
+            // Tìm ô lưới gần nhất để gắn đạn vào vị trí chính xác
             let bestX = bullet.x;
             let bestY = bullet.y;
-            let bestRow = 0;
-            let bestCol = 0;
-
-            // Tính toán vị trí bám vào lưới gần nhất
-            let approxRow = Math.round((bullet.y - 35) / rowHeight);
-            let approxCol = Math.round((bullet.x - 35) / colWidth);
             
-            let xOffset = (approxRow % 2 === 1) ? colWidth / 2 : 0;
-            let targetX = 35 + approxCol * colWidth + xOffset;
-            let targetY = 35 + approxRow * rowHeight;
+            let approxRow = Math.round((bullet.y - 25) / rowHeight);
+            if (approxRow < 0) approxRow = 0;
+            
+            let rowOffsetX = (approxRow % 2 === 1) ? radius : 0;
+            let approxCol = Math.round((bullet.x - 25 - radius - rowOffsetX) / diameter);
+            
+            let colsInRow = (approxRow % 2 === 1) ? cols - 1 : cols;
+            if (approxCol < 0) approxCol = 0;
+            if (approxCol >= colsInRow) approxCol = colsInRow - 1;
+
+            let targetX = 25 + radius + approxCol * diameter + rowOffsetX;
+            let targetY = 25 + approxRow * rowHeight;
 
             let newBubble = {
                 row: approxRow,
@@ -137,11 +144,17 @@ game_code = """
 
             bubbles.push(newBubble);
 
-            // Kiểm tra lan truyền màu (Match-3+)
-            checkMatch(newBubble, bColor);
+            // Kiểm tra cụm màu để nổ
+            let poppedCount = checkMatch(newBubble, bColor);
             
-            // Sau khi bắn xong và dính bóng, đẩy hàng mới xuống thêm thử thách
-            addNewRow();
+            if (poppedCount === 0) {
+                // Nếu bắn không nổ, tích lũy lượt bắn để đẩy hàng mới xuống
+                shotsSinceLastRow++;
+                if (shotsSinceLastRow >= 4) {
+                    addNewRow();
+                    shotsSinceLastRow = 0;
+                }
+            }
         }
 
         function checkMatch(startBubble, targetColor) {
@@ -159,21 +172,25 @@ game_code = """
                     for (let b of bubbles) {
                         if (b.active && !visited.has(b)) {
                             let dist = Math.hypot(current.x - b.x, current.y - b.y);
-                            if (dist < colWidth * 1.35) {
+                            if (dist < diameter * 1.15) { // Khoảng cách hàng xóm chuẩn lục giác
                                 visited.add(b);
-                                queue.add ? queue.push(b) : queue.push(b);
+                                queue.push(b);
                             }
                         }
                     }
                 }
             }
 
-            // Nếu cụm từ 2 hoặc 3 quả cùng màu trở lên thì nổ
-            if (matched.length >= 2) {
+            // Nếu từ 3 quả trở lên thì nổ
+            if (matched.length >= 3) {
                 matched.forEach(b => {
                     b.active = false;
-                    score += 15;
+                    score += 20;
                 });
+                return matched.length;
+            } else {
+                // Trả về 0 nếu không đủ cụm để nổ
+                return 0;
             }
         }
 
@@ -187,87 +204,18 @@ game_code = """
                     bullet.dx *= -1;
                 }
 
-                // Chạm trần trên cùng -> Dính bóng ngay
-                if (bullet.y - radius <= 20) {
+                // Chạm trần trên cùng
+                if (bullet.y - radius <= 15) {
                     snapBulletToGrid(bullet.color);
                     bullet = null;
                     return;
                 }
 
-                // Va chạm với các quả bóng đang có trên lưới -> Dính bóng
+                // Va chạm với các bóng khác trên lưới
                 for (let b of bubbles) {
                     if (b.active) {
                         let dist = Math.hypot(bullet.x - b.x, bullet.y - b.y);
-                        if (dist < radius * 1.8) {
+                        if (dist < diameter * 0.95) {
                             snapBulletToGrid(bullet.color);
                             bullet = null;
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-
-        function draw() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            // Điểm số
-            ctx.fillStyle = "#FFFFFF";
-            ctx.font = "bold 18px sans-serif";
-            ctx.fillText("Điểm: " + score, 25, 25);
-
-            // Vẽ các bóng
-            bubbles.forEach(b => {
-                if (b.active) {
-                    ctx.beginPath();
-                    ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
-                    ctx.fillStyle = b.color;
-                    ctx.fill();
-                    ctx.lineWidth = 2;
-                    ctx.strokeStyle = "rgba(255,255,255,0.2)";
-                    ctx.stroke();
-                    ctx.closePath();
-                }
-            });
-
-            // Đường ngắm
-            ctx.beginPath();
-            ctx.moveTo(shooter.x, shooter.y);
-            ctx.lineTo(mouseX, mouseY);
-            ctx.setLineDash([4, 4]);
-            ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
-            ctx.stroke();
-            ctx.setLineDash([]);
-
-            // Đạn đang bay
-            if (bullet) {
-                ctx.beginPath();
-                ctx.arc(bullet.x, bullet.y, radius, 0, Math.PI * 2);
-                ctx.fillStyle = bullet.color;
-                ctx.fill();
-                ctx.closePath();
-            }
-
-            // Súng bắn phía dưới
-            ctx.beginPath();
-            ctx.arc(shooter.x, shooter.y, shooter.radius, 0, Math.PI * 2);
-            ctx.fillStyle = shooter.color;
-            ctx.fill();
-            ctx.lineWidth = 3;
-            ctx.strokeStyle = "#FFF";
-            ctx.stroke();
-            ctx.closePath();
-        }
-
-        function loop() {
-            update();
-            draw();
-            requestAnimationFrame(loop);
-        }
-        loop();
-    </script>
-</body>
-</html>
-"""
-
-components.html(game_code, height=560)
+                            break
