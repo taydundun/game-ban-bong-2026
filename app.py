@@ -57,44 +57,51 @@ function getNeighbors(r, c) {
     return (r % 2 === 0) ? [{r: r-1, c: c-1}, {r: r-1, c: c}, {r: r, c: c-1}, {r: r, c: c+1}, {r: r+1, c: c-1}, {r: r+1, c: c}] : [{r: r-1, c: c}, {r: r-1, c: c+1}, {r: r, c: c-1}, {r: r, c: c+1}, {r: r+1, c: c}, {r: r+1, c: c+1}];
 }
 
-function snap(hitB, bCol) {
-    let target = null, nList = getNeighbors(hitB.row, hitB.col), iAngle = Math.atan2(bullet.y - hitB.y, bullet.x - hitB.x), minDiff = Infinity;
-    for (let n of nList) {
-        let maxC = (n.r % 2 === 1) ? 9 : 10;
-        if (n.r >= 0 && n.r < 15 && n.c >= 0 && n.c < maxC && !bubbles.some(b => b.active && b.row === n.r && b.col === n.c)) {
-            let offX = (n.r % 2 === 1) ? rad : 0, tx = 25 + rad + n.c * dia + offX, ty = 25 + n.r * rH;
-            let diff = Math.abs(iAngle - Math.atan2(ty - hitB.y, tx - hitB.x));
-            if (diff > Math.PI) diff = Math.PI * 2 - diff;
-            if (diff < minDiff) { minDiff = diff; target = { row: n.r, col: n.c, x: tx, y: ty }; }
-        }
-    }
-    if (!target) {
-        for (let r = 0; r < 15; r++) {
-            let maxC = (r % 2 === 1) ? 9 : 10;
-            for (let c = 0; c < maxC; c++) {
-                if (!bubbles.some(b => b.active && b.row === r && b.col === c)) {
-                    let offX = (r % 2 === 1) ? rad : 0;
-                    target = { row: r, col: c, x: 25 + rad + c * dia + offX, y: 25 + r * rH };
-                    break;
+function findBestEmptyCell(x, y) {
+    let bestCell = null, minD = Infinity;
+    for (let r = 0; r < 15; r++) {
+        let maxC = (r % 2 === 1) ? 9 : 10;
+        let offX = (r % 2 === 1) ? rad : 0;
+        for (let c = 0; c < maxC; c++) {
+            let occupied = bubbles.some(b => b.active && b.row === r && b.col === c);
+            if (!occupied) {
+                let hasNeighbor = (r === 0) || getNeighbors(r, c).some(n => bubbles.some(b => b.active && b.row === n.r && b.col === n.c));
+                if (hasNeighbor) {
+                    let tx = 25 + rad + c * dia + offX;
+                    let ty = 25 + r * rH;
+                    let d = Math.hypot(x - tx, y - ty);
+                    if (d < minD) { minD = d; bestCell = { row: r, col: c, x: tx, y: ty }; }
                 }
             }
-            if (target) break;
         }
     }
-    let nb = { row: target.row, col: target.col, x: target.x, y: target.y, r: rad, color: bCol, active: true };
-    bubbles.push(nb);
-    if (nb.y >= 430) { over = true; return; }
-    if (match(nb, bCol) > 0) floatCheck(); else { shots++; if (shots >= 5) { addRow(); shots = 0; } }
+    if (!bestCell) {
+        minD = Infinity;
+        for (let r = 0; r < 15; r++) {
+            let maxC = (r % 2 === 1) ? 9 : 10;
+            let offX = (r % 2 === 1) ? rad : 0;
+            for (let c = 0; c < maxC; c++) {
+                if (!bubbles.some(b => b.active && b.row === r && b.col === c)) {
+                    let tx = 25 + rad + c * dia + offX;
+                    let ty = 25 + r * rH;
+                    let d = Math.hypot(x - tx, y - ty);
+                    if (d < minD) { minD = d; bestCell = { row: r, col: c, x: tx, y: ty }; }
+                }
+            }
+        }
+    }
+    return bestCell;
 }
 
-function snapCeiling(bCol) {
-    let ac = Math.max(0, Math.min(9, Math.round((bullet.x - 25 - rad) / dia)));
-    if (bubbles.some(b => b.active && b.row === 0 && b.col === ac)) {
-        for (let c = 0; c < 10; c++) { if (!bubbles.some(b => b.active && b.row === 0 && b.col === c)) { ac = c; break; } }
+function handleCollision(bCol) {
+    let target = findBestEmptyCell(bullet.x, bullet.y);
+    if (target) {
+        let nb = { row: target.row, col: target.col, x: target.x, y: target.y, r: rad, color: bCol, active: true };
+        bubbles.push(nb);
+        if (nb.y >= 430) { over = true; return; }
+        if (match(nb, bCol) > 0) { floatCheck(); }
+        else { shots++; if (shots >= 5) { addRow(); shots = 0; } }
     }
-    let nb = { row: 0, col: ac, x: 25 + rad + ac * dia, y: 25, r: rad, color: bCol, active: true };
-    bubbles.push(nb);
-    if (match(nb, bCol) > 0) floatCheck(); else { shots++; if (shots >= 5) { addRow(); shots = 0; } }
 }
 
 function match(startB, tCol) {
@@ -137,9 +144,17 @@ function update() {
     if (bullet) {
         bullet.x += bullet.dx; bullet.y += bullet.dy;
         if (bullet.x - rad < 0 || bullet.x + rad > cvs.width) bullet.dx *= -1;
-        if (bullet.y - rad <= 15) { snapCeiling(bullet.color); bullet = null; return; }
+        if (bullet.y - rad <= 15) {
+            handleCollision(bullet.color);
+            bullet = null;
+            return;
+        }
         for (let b of bubbles) {
-            if (b.active && Math.hypot(bullet.x - b.x, bullet.y - b.y) <= dia) { snap(b, bullet.color); bullet = null; break; }
+            if (b.active && Math.hypot(bullet.x - b.x, bullet.y - b.y) <= dia) {
+                handleCollision(bullet.color);
+                bullet = null;
+                break;
+            }
         }
     }
     fallingBubbles.forEach(fb => { fb.y += fb.dy; fb.x += fb.dx; fb.dy += 0.5; });
