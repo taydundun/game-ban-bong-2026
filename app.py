@@ -76,11 +76,13 @@ html_code = """<!DOCTYPE html>
         }
 
         function snap(hitB, bCol) {
-            let best = null, minD = Infinity;
+            let best = null, minScore = Infinity;
             let nList = getNeighbors(hitB.row, hitB.col);
             
-            // 1. Ưu tiên tìm các ô trống xung quanh quả bóng bị bắn trúng
+            // Chỉ xét các ô lân cận nằm NGANG hoặc PHÍA TRÊN quả bị chạm (hoặc cùng hàng/hàng trên), 
+            // TUYỆT ĐỐI KHÔNG cho phép đạn chui xuống dưới tạo đuôi dọc.
             for (let n of nList) {
+                if (n.r > hitB.row) continue; // Chặn đứng việc rớt xuống dưới tạo đuôi
                 let maxC = (n.r % 2 === 1) ? 9 : 10;
                 if (n.r >= 0 && n.r < 15 && n.c >= 0 && n.c < maxC) {
                     let occupied = bubbles.some(b => b.active && b.row === n.r && b.col === n.c);
@@ -88,24 +90,49 @@ html_code = """<!DOCTYPE html>
                         let offX = (n.r % 2 === 1) ? rad : 0;
                         let tx = 25 + rad + n.c * dia + offX;
                         let ty = 25 + n.r * rH;
+                        
+                        // Tính điểm phù hợp dựa trên góc va chạm của viên đạn so với tâm ô trống
+                        let angleToBullet = Math.atan2(bullet.y - ty, bullet.x - tx);
                         let d = Math.hypot(bullet.x - tx, bullet.y - ty);
-                        if (d < minD) { minD = d; best = {row: n.r, col: n.c, x: tx, y: ty}; }
+                        
+                        // Ưu tiên ô nào nằm đúng hướng viên đạn bay tới nhất
+                        if (d < minScore) {
+                            minScore = d;
+                            best = { row: n.r, col: n.c, x: tx, y: ty };
+                        }
                     }
                 }
             }
 
-            // 2. Fallback an toàn: Nếu vùng xung quanh đã kín, quét toàn bộ lưới để tìm ô trống gần nhất (chống mất đạn)
+            // Fallback nếu không tìm thấy ô phía trên/ngang, tìm ô trống gần nhất bất kỳ xung quanh quả bị chạm
+            if (!best) {
+                for (let n of nList) {
+                    let maxC = (n.r % 2 === 1) ? 9 : 10;
+                    if (n.r >= 0 && n.r < 15 && n.c >= 0 && n.c < maxC) {
+                        let occupied = bubbles.some(b => b.active && b.row === n.r && b.col === n.c);
+                        if (!occupied) {
+                            let offX = (n.r % 2 === 1) ? rad : 0;
+                            let tx = 25 + rad + n.c * dia + offX;
+                            let ty = 25 + n.r * rH;
+                            let d = Math.hypot(bullet.x - tx, bullet.y - ty);
+                            if (d < minScore) { minScore = d; best = { row: n.r, col: n.c, x: tx, y: ty }; }
+                        }
+                    }
+                }
+            }
+
+            // Fallback toàn cục cuối cùng chống mất đạn
             if (!best) {
                 for (let r = 0; r < 15; r++) {
                     let maxC = (r % 2 === 1) ? 9 : 10;
+                    let occupied = bubbles.some(b => b.active && b.row === r && b.col === c);
                     for (let c = 0; c < maxC; c++) {
-                        let occupied = bubbles.some(b => b.active && b.row === r && b.col === c);
-                        if (!occupied) {
+                        if (!bubbles.some(b => b.active && b.row === r && b.col === c)) {
                             let offX = (r % 2 === 1) ? rad : 0;
                             let tx = 25 + rad + c * dia + offX;
                             let ty = 25 + r * rH;
                             let d = Math.hypot(bullet.x - tx, bullet.y - ty);
-                            if (d < minD) { minD = d; best = {row: r, col: c, x: tx, y: ty}; }
+                            if (d < minScore) { minScore = d; best = { row: r, col: c, x: tx, y: ty }; }
                         }
                     }
                 }
