@@ -5,7 +5,7 @@ import base64
 st.set_page_config(page_title="Game Bắn Bóng", layout="centered")
 
 st.title("🎯 Game Bắn Bóng (Bubble Shooter)")
-st.write("Phiên bản kiểm tra lỗi: Chống xếp chồng dọc tuyệt đối, bóng tự lấp khe trống và đường ngắm phản xạ tường có nếp gấp!")
+st.write("Phiên bản ổn định: Chống xếp chồng dọc tuyệt đối, tự lấp khe trống và đường ngắm phản xạ tường có nếp gấp!")
 
 html_code = """
 <!DOCTYPE html>
@@ -356,3 +356,7 @@ html_code = """
     </script>
 </body>
 </html>
+"""
+
+encoded_html = base64.b64encode(html_code.encode("utf-8")).decode("utf-8")
+components.iframe(f"data:text/html;base64,{encoded_html}", height=580)
