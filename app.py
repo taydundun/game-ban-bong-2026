@@ -4,9 +4,8 @@ import streamlit.components.v1 as components
 st.set_page_config(page_title="Game Bắn Bóng", layout="centered")
 
 st.title("🎯 Game Bắn Bóng (Bubble Shooter)")
-st.write("Di chuyển chuột để ngắm và Click chuột trái để bắn bóng!")
+st.write("Ngắm bằng chuột, Click bắn bóng cùng màu để ăn điểm và tạo hàng bóng mới!")
 
-# Code HTML5 Canvas + JavaScript đã fix lỗi đơ/kẹt đạn
 game_code = """
 <!DOCTYPE html>
 <html>
@@ -24,7 +23,7 @@ game_code = """
     </style>
 </head>
 <body>
-    <canvas id="gameCanvas" width="440" height="520"></canvas>
+    <canvas id="gameCanvas" width="440" height="540"></canvas>
     <script>
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
@@ -36,23 +35,24 @@ game_code = """
             return colors[Math.floor(Math.random() * colors.length)];
         }
 
-        let shooter = { x: 220, y: 480, radius: 16, color: getRandomColor() };
+        let shooter = { x: 220, y: 500, radius: 16, color: getRandomColor() };
         let bullet = null;
         let mouseX = 220, mouseY = 0;
 
-        // Khởi tạo lưới bóng
         let bubbles = [];
-        const rows = 5;
+        const rows = 4;
         const cols = 9;
         const radius = 18;
+        const rowHeight = 36;
 
+        // Khởi tạo lưới bóng ban đầu
         function initBubbles() {
             bubbles = [];
             for (let r = 0; r < rows; r++) {
                 for (let c = 0; c < cols; c++) {
                     bubbles.push({
-                        x: 40 + c * 44,
-                        y: 40 + r * 40,
+                        x: 35 + c * 45,
+                        y: 40 + r * rowHeight,
                         radius: radius,
                         color: getRandomColor(),
                         active: true
@@ -61,6 +61,25 @@ game_code = """
             }
         }
         initBubbles();
+
+        // Thêm 1 hàng bóng mới lên trên cùng và đẩy các hàng cũ xuống
+        function addNewRow() {
+            // Đẩy tất cả bóng cũ xuống dưới 1 hàng
+            bubbles.forEach(b => {
+                b.y += rowHeight;
+            });
+
+            // Tạo hàng mới ở trên cùng
+            for (let c = 0; c < cols; c++) {
+                bubbles.push({
+                    x: 35 + c * 45,
+                    y: 40,
+                    radius: radius,
+                    color: getRandomColor(),
+                    active: true
+                });
+            }
+        }
 
         canvas.addEventListener("mousemove", (e) => {
             const rect = canvas.getBoundingClientRect();
@@ -71,7 +90,6 @@ game_code = """
         canvas.addEventListener("click", () => {
             if (!bullet) {
                 let angle = Math.atan2(mouseY - shooter.y, mouseX - shooter.x);
-                // Giới hạn không cho bắn ngược xuống dưới
                 if (angle > -0.1) angle = -0.1;
                 if (angle < -Math.PI + 0.1) angle = -Math.PI + 0.1;
 
@@ -96,24 +114,26 @@ game_code = """
                     bullet.dx *= -1;
                 }
 
-                // Chạm trần trên cùng -> hủy đạn
+                // Chạm trần
                 if (bullet.y - radius < 0) {
                     bullet = null;
                     return;
                 }
 
-                // Va chạm với các quả bóng
-                if (bullet) {
-                    for (let b of bubbles) {
-                        if (b.active) {
-                            let dist = Math.hypot(bullet.x - b.x, bullet.y - b.y);
-                            if (dist < radius * 2) {
-                                // Xóa bóng nếu trúng
+                // Kiểm tra va chạm với bóng
+                for (let b of bubbles) {
+                    if (b.active) {
+                        let dist = Math.hypot(bullet.x - b.x, bullet.y - b.y);
+                        if (dist < radius * 2) {
+                            // CƠ CHẾ: Cùng màu mới ăn được điểm!
+                            if (bullet.color === b.color) {
                                 b.active = false;
                                 score += 10;
-                                bullet = null; // Reset đạn để bắn tiếp
-                                break;
+                                // Ăn thành công -> Thêm 1 hàng bóng mới chồng lên trên
+                                addNewRow();
                             }
+                            bullet = null; // Hủy đạn sau khi va chạm
+                            break;
                         }
                     }
                 }
@@ -123,12 +143,12 @@ game_code = """
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Bảng điểm
+            // Hiển thị điểm số
             ctx.fillStyle = "#FFFFFF";
-            ctx.font = "bold 18px Segoe UI, sans-serif";
-            ctx.fillText("Điểm: " + score, 15, 25);
+            ctx.font = "bold 18px sans-serif";
+            ctx.fillText("Điểm: " + score, 40, 25);
 
-            // Vẽ các quả bóng mục tiêu
+            // Vẽ các quả bóng
             bubbles.forEach(b => {
                 if (b.active) {
                     ctx.beginPath();
@@ -142,7 +162,7 @@ game_code = """
                 }
             });
 
-            // Vẽ đường định hướng ngắm
+            // Đường ngắm
             ctx.beginPath();
             ctx.moveTo(shooter.x, shooter.y);
             ctx.lineTo(mouseX, mouseY);
@@ -151,7 +171,7 @@ game_code = """
             ctx.stroke();
             ctx.setLineDash([]);
 
-            // Vẽ đạn đang bay
+            // Đạn đang bay
             if (bullet) {
                 ctx.beginPath();
                 ctx.arc(bullet.x, bullet.y, radius, 0, Math.PI * 2);
@@ -160,7 +180,7 @@ game_code = """
                 ctx.closePath();
             }
 
-            // Vẽ súng/bóng chuẩn bị bắn
+            // Viên đạn chuẩn bị bắn ở súng
             ctx.beginPath();
             ctx.arc(shooter.x, shooter.y, shooter.radius, 0, Math.PI * 2);
             ctx.fillStyle = shooter.color;
@@ -182,4 +202,4 @@ game_code = """
 </html>
 """
 
-components.html(game_code, height=540)
+components.html(game_code, height=560)
