@@ -5,7 +5,7 @@ import base64
 st.set_page_config(page_title="Game Bắn Bóng", layout="centered")
 
 st.title("🎯 Game Bắn Bóng (Bubble Shooter)")
-st.write("Phiên bản hoàn hảo: Đã sửa triệt để lỗi bóng đi xuyên và dính đè lên nhau, bám lưới lục giác chuẩn xác!")
+st.write("Phiên bản chuẩn xác: Đã chặn đứng hoàn toàn việc bám phía dưới, bóng chỉ lấp vào các khe phía trên và ngang!")
 
 html_code = """
 <!DOCTYPE html>
@@ -126,42 +126,53 @@ html_code = """
             }
         });
 
-        // THUẬT TOÁN BÁM LƯỚI CHUẨN XÁC: TÌM Ô TRỐNG GẦN ĐẠN NHẤT VÀ ĐẢM BẢO KHÔNG TRÙNG LẶP
-        function snapBullet() {
+        // THUẬT TOÁN BÁM LƯỚI CHUẨN XÁC: CHỈ CHO PHÉP BÁM VÀO KHE PHÍA TRÊN HOẶC NGANG
+        function snapToHitBubble(hitBubble, bColor) {
+            let r = hitBubble.row;
+            let c = hitBubble.col;
+            let neighbors = [];
+
+            if (r % 2 === 0) {
+                neighbors = [
+                    {r: r-1, c: c-1}, {r: r-1, c: c},
+                    {r: r, c: c-1}, {r: r, c: c+1},
+                    {r: r+1, c: c-1}, {r: r+1, c: c}
+                ];
+            } else {
+                neighbors = [
+                    {r: r-1, c: c}, {r: r-1, c: c+1},
+                    {r: r, c: c-1}, {r: r, c: c+1},
+                    {r: r+1, c: c}, {r: r+1, c: c+1}
+                ];
+            }
+
             let bestSlot = null;
             let minDist = Infinity;
 
-            for (let r = 0; r < 15; r++) {
-                let colsInRow = (r % 2 === 1) ? cols - 1 : cols;
-                let rowOffsetX = (r % 2 === 1) ? radius : 0;
-                for (let c = 0; c < colsInRow; c++) {
-                    let occupied = bubbles.some(b => b.active && b.row === r && b.col === c);
+            for (let n of neighbors) {
+                let colsInRow = (n.r % 2 === 1) ? cols - 1 : cols;
+                if (n.r >= 0 && n.c >= 0 && n.c < colsInRow) {
+                    let occupied = bubbles.some(b => b.active && b.row === n.r && b.col === n.c);
                     if (!occupied) {
-                        let targetX = 25 + radius + c * diameter + rowOffsetX;
-                        let targetY = 25 + r * rowHeight;
+                        let rowOffsetX = (n.r % 2 === 1) ? radius : 0;
+                        let targetX = 25 + radius + n.c * diameter + rowOffsetX;
+                        let targetY = 25 + n.r * rowHeight;
 
-                        let isConnected = (r === 0);
-                        if (!isConnected) {
-                            for (let b of bubbles) {
-                                if (b.active) {
-                                    let distToB = Math.hypot(targetX - b.x, targetY - b.y);
-                                    if (distToB < diameter * 1.15) {
-                                        isConnected = true;
-                                        break;
-                                    }
-                                }
-                            }
-                        }
+                        // QUAN TRỌNG: TUYỆT ĐỐI KHÔNG CHO BÁM THẤP HƠN TÂM QUẢ BÓNG BỊ CHẠM (CHẶN ĐỨNG LỖI ĐUÔI DỌC)
+                        if (targetY > hitBubble.y + radius * 0.3) continue;
 
-                        if (isConnected) {
-                            let distToBullet = Math.hypot(bullet.x - targetX, bullet.y - targetY);
-                            if (distToBullet < minDist) {
-                                minDist = distToBullet;
-                                bestSlot = { row: r, col: c, x: targetX, y: targetY };
-                            }
+                        let dist = Math.hypot(bullet.x - targetX, bullet.y - targetY);
+                        if (dist < minDist) {
+                            minDist = dist;
+                            bestSlot = { row: n.r, col: n.c, x: targetX, y: targetY };
                         }
                     }
                 }
+            }
+
+            // Fallback an toàn lên ô phía trên trực diện nếu không tìm được khe bên
+            if (!bestSlot) {
+                bestSlot = { row: Math.max(0, r-1), col: c, x: hitBubble.x, y: hitBubble.y - rowHeight };
             }
 
             if (bestSlot) {
@@ -171,7 +182,7 @@ html_code = """
                     x: bestSlot.x,
                     y: bestSlot.y,
                     radius: radius,
-                    color: bullet.color,
+                    color: bColor,
                     active: true
                 };
                 bubbles.push(newBubble);
@@ -181,7 +192,32 @@ html_code = """
                     return;
                 }
 
-                let poppedCount = checkMatch(newBubble, bullet.color);
+                let poppedCount = checkMatch(newBubble, bColor);
+                if (poppedCount > 0) {
+                    removeFloatingBubbles();
+                } else {
+                    shotsSinceLastRow++;
+                    if (shotsSinceLastRow >= 5) {
+                        addNewRow();
+                        shotsSinceLastRow = 0;
+                    }
+                }
+            }
+        }
+
+        function snapToCeiling(bColor) {
+            let approxCol = Math.round((bullet.x - 25 - radius) / diameter);
+            if (approxCol < 0) approxCol = 0;
+            if (approxCol >= cols) approxCol = cols - 1;
+
+            let targetX = 25 + radius + approxCol * diameter;
+            let targetY = 25;
+
+            let occupied = bubbles.some(b => b.active && b.row === 0 && b.col === approxCol);
+            if (!occupied) {
+                let newBubble = { row: 0, col: approxCol, x: targetX, y: targetY, radius: radius, color: bColor, active: true };
+                bubbles.push(newBubble);
+                let poppedCount = checkMatch(newBubble, bColor);
                 if (poppedCount > 0) {
                     removeFloatingBubbles();
                 } else {
@@ -270,7 +306,7 @@ html_code = """
                 }
 
                 if (bullet.y - radius <= 15) {
-                    snapBullet();
+                    snapToCeiling(bullet.color);
                     bullet = null;
                     return;
                 }
@@ -279,7 +315,7 @@ html_code = """
                     if (b.active) {
                         let dist = Math.hypot(bullet.x - b.x, bullet.y - b.y);
                         if (dist < diameter * 0.95) {
-                            snapBullet();
+                            snapToHitBubble(b, bullet.color);
                             bullet = null;
                             break;
                         }
@@ -297,72 +333,5 @@ html_code = """
             ctx.fillText("Chờ hàng: " + (5 - shotsSinceLastRow), 310, 25);
 
             bubbles.forEach(b => {
-                if (b.active) {
-                    ctx.beginPath();
-                    ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
-                    ctx.fillStyle = b.color;
-                    ctx.fill();
-                    ctx.lineWidth = 2;
-                    ctx.strokeStyle = "rgba(255,255,255,0.25)";
-                    ctx.stroke();
-                    ctx.closePath();
-                }
-            });
-
-            if (!gameOver) {
-                ctx.beginPath();
-                ctx.moveTo(shooter.x, shooter.y);
-                ctx.lineTo(mouseX, mouseY);
-                ctx.setLineDash([4, 4]);
-                ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
-                ctx.stroke();
-                ctx.setLineDash([]);
-            }
-
-            if (bullet) {
-                ctx.beginPath();
-                ctx.arc(bullet.x, bullet.y, radius, 0, Math.PI * 2);
-                ctx.fillStyle = bullet.color;
-                ctx.fill();
-                ctx.closePath();
-            }
-
-            ctx.beginPath();
-            ctx.arc(shooter.x, shooter.y, shooter.radius, 0, Math.PI * 2);
-            ctx.fillStyle = shooter.color;
-            ctx.fill();
-            ctx.lineWidth = 3;
-            ctx.strokeStyle = "#FFF";
-            ctx.stroke();
-            ctx.closePath();
-
-            if (gameOver) {
-                ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-                ctx.fillStyle = "#FF5964";
-                ctx.font = "bold 32px sans-serif";
-                ctx.textAlign = "center";
-                ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2 - 20);
-
-                ctx.fillStyle = "#FFFFFF";
-                ctx.font = "18px sans-serif";
-                ctx.fillText("Tổng điểm: " + score, canvas.width / 2, canvas.height / 2 + 20);
-                ctx.fillText("Click chuột để chơi lại", canvas.width / 2, canvas.height / 2 + 60);
-                ctx.textAlign = "left";
-            }
-        }
-
-        function loop() {
-            update();
-            draw();
-            requestAnimationFrame(loop);
-        }
-        loop();
-    </script>
-</body>
-</html>
-"""
-
-encoded_html = base64.b64encode(html_code.encode("utf-8")).decode("utf-8")
-components.iframe(f"data:text/html;base64,{encoded_html}", height=580)
+                if (b.active)
+                
