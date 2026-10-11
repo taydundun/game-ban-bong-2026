@@ -5,7 +5,7 @@ import base64
 st.set_page_config(page_title="Game Bắn Bóng", layout="centered")
 
 st.title("🎯 Game Bắn Bóng (Bubble Shooter)")
-st.write("Phiên bản chuẩn xác hoàn hảo: Đã fix triệt để lỗi chồng bóng dọc, bóng bám chéo lưới lục giác và tự rơi khi đứt nét!")
+st.write("Phiên bản hoàn hảo: Đã sửa triệt để lỗi bóng đi xuyên và dính đè lên nhau, bám lưới lục giác chuẩn xác!")
 
 html_code = """
 <!DOCTYPE html>
@@ -126,47 +126,42 @@ html_code = """
             }
         });
 
-        // THUẬT TOÁN BÁM LƯỚI CHUẨN XÁC: CHỈ TÌM Ô TRỐNG NẰM PHÍA TRÊN HOẶC NGANG HÀNG
-        function snapToHitBubble(hitBubble, bColor) {
-            let r = hitBubble.row;
-            let c = hitBubble.col;
-            let neighbors = [];
-
-            if (r % 2 === 0) {
-                neighbors = [
-                    {r: r-1, c: c-1}, {r: r-1, c: c},
-                    {r: r, c: c-1}, {r: r, c: c+1}
-                ];
-            } else {
-                neighbors = [
-                    {r: r-1, c: c}, {r: r-1, c: c+1},
-                    {r: r, c: c-1}, {r: r, c: c+1}
-                ];
-            }
-
+        // THUẬT TOÁN BÁM LƯỚI CHUẨN XÁC: TÌM Ô TRỐNG GẦN ĐẠN NHẤT VÀ ĐẢM BẢO KHÔNG TRÙNG LẶP
+        function snapBullet() {
             let bestSlot = null;
             let minDist = Infinity;
 
-            for (let n of neighbors) {
-                let colsInRow = (n.r % 2 === 1) ? cols - 1 : cols;
-                if (n.r >= 0 && n.c >= 0 && n.c < colsInRow) {
-                    let occupied = bubbles.some(b => b.active && b.row === n.r && b.col === n.c);
+            for (let r = 0; r < 15; r++) {
+                let colsInRow = (r % 2 === 1) ? cols - 1 : cols;
+                let rowOffsetX = (r % 2 === 1) ? radius : 0;
+                for (let c = 0; c < colsInRow; c++) {
+                    let occupied = bubbles.some(b => b.active && b.row === r && b.col === c);
                     if (!occupied) {
-                        let rowOffsetX = (n.r % 2 === 1) ? radius : 0;
-                        let targetX = 25 + radius + n.c * diameter + rowOffsetX;
-                        let targetY = 25 + n.r * rowHeight;
+                        let targetX = 25 + radius + c * diameter + rowOffsetX;
+                        let targetY = 25 + r * rowHeight;
 
-                        let dist = Math.hypot(bullet.x - targetX, bullet.y - targetY);
-                        if (dist < minDist) {
-                            minDist = dist;
-                            bestSlot = { row: n.r, col: n.c, x: targetX, y: targetY };
+                        let isConnected = (r === 0);
+                        if (!isConnected) {
+                            for (let b of bubbles) {
+                                if (b.active) {
+                                    let distToB = Math.hypot(targetX - b.x, targetY - b.y);
+                                    if (distToB < diameter * 1.15) {
+                                        isConnected = true;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+
+                        if (isConnected) {
+                            let distToBullet = Math.hypot(bullet.x - targetX, bullet.y - targetY);
+                            if (distToBullet < minDist) {
+                                minDist = distToBullet;
+                                bestSlot = { row: r, col: c, x: targetX, y: targetY };
+                            }
                         }
                     }
                 }
-            }
-
-            if (!bestSlot) {
-                bestSlot = { row: Math.max(0, r-1), col: c, x: hitBubble.x, y: hitBubble.y - rowHeight };
             }
 
             if (bestSlot) {
@@ -176,7 +171,7 @@ html_code = """
                     x: bestSlot.x,
                     y: bestSlot.y,
                     radius: radius,
-                    color: bColor,
+                    color: bullet.color,
                     active: true
                 };
                 bubbles.push(newBubble);
@@ -186,32 +181,7 @@ html_code = """
                     return;
                 }
 
-                let poppedCount = checkMatch(newBubble, bColor);
-                if (poppedCount > 0) {
-                    removeFloatingBubbles();
-                } else {
-                    shotsSinceLastRow++;
-                    if (shotsSinceLastRow >= 5) {
-                        addNewRow();
-                        shotsSinceLastRow = 0;
-                    }
-                }
-            }
-        }
-
-        function snapToCeiling(bColor) {
-            let approxCol = Math.round((bullet.x - 25 - radius) / diameter);
-            if (approxCol < 0) approxCol = 0;
-            if (approxCol >= cols) approxCol = cols - 1;
-
-            let targetX = 25 + radius + approxCol * diameter;
-            let targetY = 25;
-
-            let occupied = bubbles.some(b => b.active && b.row === 0 && b.col === approxCol);
-            if (!occupied) {
-                let newBubble = { row: 0, col: approxCol, x: targetX, y: targetY, radius: radius, color: bColor, active: true };
-                bubbles.push(newBubble);
-                let poppedCount = checkMatch(newBubble, bColor);
+                let poppedCount = checkMatch(newBubble, bullet.color);
                 if (poppedCount > 0) {
                     removeFloatingBubbles();
                 } else {
@@ -300,7 +270,7 @@ html_code = """
                 }
 
                 if (bullet.y - radius <= 15) {
-                    snapToCeiling(bullet.color);
+                    snapBullet();
                     bullet = null;
                     return;
                 }
@@ -309,7 +279,7 @@ html_code = """
                     if (b.active) {
                         let dist = Math.hypot(bullet.x - b.x, bullet.y - b.y);
                         if (dist < diameter * 0.95) {
-                            snapToHitBubble(b, bullet.color);
+                            snapBullet();
                             bullet = null;
                             break;
                         }
