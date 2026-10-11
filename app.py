@@ -78,6 +78,8 @@ html_code = """<!DOCTYPE html>
         function snap(hitB, bCol) {
             let best = null, minD = Infinity;
             let nList = getNeighbors(hitB.row, hitB.col);
+            
+            // 1. Ưu tiên tìm các ô trống xung quanh quả bóng bị bắn trúng
             for (let n of nList) {
                 let maxC = (n.r % 2 === 1) ? 9 : 10;
                 if (n.r >= 0 && n.r < 15 && n.c >= 0 && n.c < maxC) {
@@ -91,6 +93,24 @@ html_code = """<!DOCTYPE html>
                     }
                 }
             }
+
+            // 2. Fallback an toàn: Nếu vùng xung quanh đã kín, quét toàn bộ lưới để tìm ô trống gần nhất (chống mất đạn)
+            if (!best) {
+                for (let r = 0; r < 15; r++) {
+                    let maxC = (r % 2 === 1) ? 9 : 10;
+                    for (let c = 0; c < maxC; c++) {
+                        let occupied = bubbles.some(b => b.active && b.row === r && b.col === c);
+                        if (!occupied) {
+                            let offX = (r % 2 === 1) ? rad : 0;
+                            let tx = 25 + rad + c * dia + offX;
+                            let ty = 25 + r * rH;
+                            let d = Math.hypot(bullet.x - tx, bullet.y - ty);
+                            if (d < minD) { minD = d; best = {row: r, col: c, x: tx, y: ty}; }
+                        }
+                    }
+                }
+            }
+
             if (best) {
                 let doubleCheck = bubbles.some(b => b.active && b.row === best.row && b.col === best.col);
                 if (!doubleCheck) {
@@ -109,11 +129,15 @@ html_code = """<!DOCTYPE html>
             let tx = 25 + rad + ac * dia;
             let ty = 25;
             if (bubbles.some(b => b.active && b.row === 0 && b.col === ac)) {
+                let minD = Infinity, bestC = ac;
                 for (let c = 0; c < 10; c++) {
                     if (!bubbles.some(b => b.active && b.row === 0 && b.col === c)) {
-                        ac = c; tx = 25 + rad + ac * dia; break;
+                        let cx = 25 + rad + c * dia;
+                        let d = Math.abs(cx - bullet.x);
+                        if (d < minD) { minD = d; bestC = c; }
                     }
                 }
+                ac = bestC; tx = 25 + rad + ac * dia;
             }
             let nb = { row: 0, col: ac, x: tx, y: ty, r: rad, color: bCol, active: true };
             bubbles.push(nb);
